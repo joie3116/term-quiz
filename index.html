@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>용어 퀴즈</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <!-- 첫 화면: 묶음 고르기 (버튼은 app.js가 만든다) -->
+    <section id="home-screen">
+      <h1>용어 퀴즈</h1>
+      <p class="guide">묶음을 하나 고르세요.</p>
+      <div id="group-buttons" class="group-buttons"></div>
+    </section>
+
+    <!-- 문제 화면: 용어 하나 + 뜻 4개 -->
+    <section id="quiz-screen" hidden>
+      <h2 class="question">
+        <span id="term"></span>
+        <span id="look-only" class="look-only" hidden>(알아보기만)</span>
+      </h2>
+      <div id="choices" class="choices"></div>
+
+      <div id="feedback" class="feedback" hidden>
+        <p id="verdict" class="verdict"></p>
+        <p><span class="label">정답 뜻</span> <span id="answer"></span></p>
+        <p><span class="label">비유</span> <span id="analogy"></span></p>
+      </div>
+      <button type="button" id="next-button" class="next-button" hidden>다음</button>
+    </section>
+
+    <!-- 결과 화면: 점수와 틀린 용어 번호 -->
+    <section id="result-screen" hidden>
+      <h2>결과</h2>
+      <p class="score"><span class="label">점수</span> <span id="score"></span></p>
+      <p><span class="label">틀린 용어 번호</span> <span id="wrong-list"></span></p>
+      <button type="button" id="home-button" class="home-button">처음으로</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
