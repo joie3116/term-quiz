@@ -58,7 +58,7 @@ button:disabled {
   border-color: #c8c8c8;
 }
 
-/* 첫 화면: 묶음·전체·틀린 것 버튼을 세로로 */
+/* 첫 화면: 묶음·전체·틀린 것 버튼을 세로로 (시험 버튼은 아래 .exam-button) */
 .group-buttons {
   display: grid;
   gap: 12px;
@@ -70,9 +70,33 @@ button:disabled {
   font-size: 22px;
 }
 
+/* 시험 버튼: 묶음 버튼과 같은 모양. 틀린 것 0개 안내가 그 위에 뜰 수 있게 버튼 묶음 밖에 둔다 */
+.exam-button {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  text-align: left;
+  font-size: 22px;
+}
+
 /* 첫 화면 안내 문구 (틀린 것 0개, 초기화 실패) */
 .home-message {
   margin-top: 16px;
+}
+
+/* 첫 화면 아래 시험 기록 (최근 것이 위) */
+.exam-title {
+  font-size: 24px;
+  margin: 40px 0 8px;
+}
+
+.exam-list {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.exam-empty {
+  color: #555555;
 }
 
 /* 기록 초기화: 퀴즈 버튼과 떨어뜨려 맨 아래에 작게. 강조색(초록·빨강)은 쓰지 않는다 */
@@ -131,7 +155,7 @@ button:disabled {
   color: #cf222e; /* 틀림: 빨강 */
 }
 
-/* 저장 실패 문구 (피드백 칸 안). 빨강은 "틀림" 표시라 쓰지 않는다 */
+/* 저장 실패 문구 (문제 화면 피드백 칸, 결과 화면의 시험 기록 저장 실패). 빨강은 "틀림" 표시라 쓰지 않는다 */
 .save-error {
   color: #555555;
   font-weight: bold;
@@ -154,4 +178,10 @@ button:disabled {
 /* 결과 화면 */
 .score {
   font-size: 28px;
+}
+
+/* 시험 통과/미통과: 색 없이 굵게 (초록·빨강은 맞음/틀림에만 쓴다) */
+.pass-result {
+  font-size: 28px;
+  font-weight: bold;
 }

@@ -1,4 +1,4 @@
-// 용어 퀴즈 — 기능 1(묶음 고르기 + 객관식) + 기능 2(틀린 것만 다시 보기)
+// 용어 퀴즈 — 기능 1(묶음 고르기 + 객관식) + 기능 2(틀린 것만 다시 보기) + 기능 3(시험)
 (() => {
   'use strict';
 
@@ -106,13 +106,20 @@
   const wrongListEl = document.getElementById('wrong-list');
   const homeBtn = document.getElementById('home-button');
   const homeMessageEl = document.getElementById('home-message');
+  const wrongMessageEl = document.getElementById('wrong-message');
+  const examBtn = document.getElementById('exam-button');
   const resetBtn = document.getElementById('reset-button');
   const saveErrorEl = document.getElementById('save-error');
+  const passResultEl = document.getElementById('pass-result');
+  const examSaveErrorEl = document.getElementById('exam-save-error');
+  const examListEl = document.getElementById('exam-list');
+  const examEmptyEl = document.getElementById('exam-empty');
 
   // 지금 풀고 있는 한 판. 묶음을 고를 때마다 새로 만든다
-  // (한 판 자체는 저장하지 않는다. 틀린 것 목록은 답해서 바뀔 때 바로 저장한다)
+  // (한 판 자체는 저장하지 않는다. 틀린 것 목록은 답해서 바뀔 때 바로 저장하고, 시험 기록은 시험이 끝날 때 저장한다)
   // { questions: 섞은 용어 목록, index: 지금 몇 번째 문제(0부터), correct: 맞은 수,
-  //   wrongNumbers: 이번 판에 틀린 용어 번호들, answered: 지금 문제에 답했나 }
+  //   wrongNumbers: 이번 판에 틀린 용어 번호들, answered: 지금 문제에 답했나,
+  //   isExam: 시험인가, examSaved: 시험 기록 저장에 성공했나 }
   let round = null;
 
   // ===== 틀린 것 목록 저장 (localStorage) =====
@@ -165,6 +172,86 @@
     return true;
   }
 
+  // ===== 시험 기록 저장 (localStorage) =====
+
+  // 시험 기록 저장 키 (결정 사항 13). 이름은 바꾸지 않는다
+  const EXAMS_KEY = 'term-quiz.exams';
+
+  // 통과선 (결정 사항 5: 57점 = 85%). 이 점수 이상이면 통과
+  const PASS_SCORE = 57;
+
+  // 저장된 시험 기록(회차 배열, 오래된 것부터)을 읽는다. 저장 공간을 못 쓰거나 값이 망가졌으면 빈 목록.
+  // 모양이 맞는 기록만 남긴다: { 날짜: '2026-11-05', 시각: '08:30', 점수: 60, 문제수: 67 }
+  function loadExams() {
+    let saved;
+    try {
+      const raw = localStorage.getItem(EXAMS_KEY);
+      saved = raw ? JSON.parse(raw) : [];
+    } catch (err) {
+      return [];
+    }
+    if (!Array.isArray(saved)) return [];
+    return saved
+      .filter(isValidExam)
+      .map((exam) => ({ 날짜: exam.날짜, 시각: exam.시각, 점수: exam.점수, 문제수: exam.문제수 }));
+  }
+
+  // 기록 한 회의 모양이 맞는지: 날짜 'YYYY-MM-DD', 시각 'HH:MM', 0 ≤ 점수 ≤ 문제수 (정수)
+  function isValidExam(exam) {
+    return (
+      exam !== null &&
+      typeof exam === 'object' &&
+      typeof exam.날짜 === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(exam.날짜) &&
+      typeof exam.시각 === 'string' &&
+      /^\d{2}:\d{2}$/.test(exam.시각) &&
+      Number.isInteger(exam.문제수) &&
+      exam.문제수 > 0 &&
+      Number.isInteger(exam.점수) &&
+      exam.점수 >= 0 &&
+      exam.점수 <= exam.문제수
+    );
+  }
+
+  // 시험 기록 목록을 저장한다. 성공하면 true, 실패하면 false
+  function saveExams(list) {
+    try {
+      localStorage.setItem(EXAMS_KEY, JSON.stringify(list));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // 시험 기록 칸 하나만 지운다. 성공하면 true
+  function removeExams() {
+    try {
+      localStorage.removeItem(EXAMS_KEY);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // 끝난 시험 한 회를 기록 뒤에 붙인다. 다른 탭에서 바꾼 것을 덮어쓰지 않도록 쓰기 직전에 다시 읽는다.
+  // 날짜·시각은 PC 현지 시간이다 (toISOString은 세계 표준시라, 한국에서는 오전 9시 전이면 날짜가 하루 어긋나고
+  // 시각은 늘 9시간 다르다). 성공하면 true
+  function addExam(score, total) {
+    const now = new Date();
+    const record = {
+      날짜: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()),
+      시각: pad2(now.getHours()) + ':' + pad2(now.getMinutes()),
+      점수: score,
+      문제수: total,
+    };
+    return saveExams(loadExams().concat(record));
+  }
+
+  // 한 자리 숫자 앞에 0을 붙인다 (5 → '05')
+  function pad2(n) {
+    return String(n).padStart(2, '0');
+  }
+
   // ===== 섞기와 보기 만들기 =====
 
   // 배열을 무작위 순서로 섞은 새 배열을 돌려준다 (원래 배열은 그대로 둔다).
@@ -215,7 +302,8 @@
   // 첫 화면의 "틀린 것 (N개)" 버튼. renderHome()이 새로 만든다
   let wrongButtonEl = null;
 
-  // 첫 화면: 묶음 1~6 버튼(번호, 이름, 개수), 전체 버튼, 틀린 것 버튼 (결정 사항 2).
+  // 첫 화면: 묶음 1~6 버튼(번호, 이름, 개수), 전체 버튼, 틀린 것 버튼 (결정 사항 2)과 시험 기록.
+  // 시험 버튼은 index.html에 고정해 두었다 (틀린 것 0개 안내가 틀린 것 버튼과 시험 버튼 사이에 뜨도록).
   // 개수는 TERMS와 저장된 목록에서 센다. 처음 열 때, "처음으로"를 누를 때, 초기화한 뒤에 다시 그린다.
   // 화면 글자는 모두 textContent로 넣는다
   function renderHome() {
@@ -232,11 +320,29 @@
     groupButtonsEl.appendChild(wrongButtonEl);
     updateWrongButton(loadWrong().length);
 
+    renderExamList();
+    wrongMessageEl.hidden = true;
     homeMessageEl.hidden = true;
   }
 
   function updateWrongButton(count) {
     wrongButtonEl.textContent = '틀린 것 (' + count + '개)';
+  }
+
+  // 첫 화면 아래 "시험 기록": 최근 것이 위로 한 줄씩 (결정 사항 5·13). 없으면 "아직 시험 기록이 없어요."
+  function renderExamList() {
+    const exams = loadExams();
+    examListEl.replaceChildren();
+    exams
+      .slice()
+      .reverse()
+      .forEach((exam) => {
+        const item = document.createElement('li');
+        item.textContent = exam.날짜 + ' ' + exam.시각 + ' — ' + exam.점수 + ' / ' + exam.문제수 + '점';
+        examListEl.appendChild(item);
+      });
+    examListEl.hidden = exams.length === 0;
+    examEmptyEl.hidden = exams.length > 0;
   }
 
   function addGroupButton(label, terms) {
@@ -249,22 +355,28 @@
 
   // "틀린 것" 버튼: 누르는 순간의 목록을 다시 읽어 그 용어들만 한 판으로 낸다.
   // 풀면서 맞춘 용어는 목록에서 빠지지만, 이번 판의 문제는 처음 그대로 간다.
-  // 0개면 버튼 글자를 (0개)로 고치고 안내 문구를 띄운다 (버튼을 다시 만들지 않아 키보드 위치가 그대로다)
+  // 0개면 버튼 글자를 (0개)로 고치고 그 버튼 바로 아래에 안내 문구를 띄운다
+  // (버튼을 다시 만들지 않아 키보드 위치가 그대로다. 문구가 시험 버튼 위에 있어, 문구로 스크롤해도 시험 버튼이 마우스 아래로 오지 않는다)
   function startWrongRound() {
     const list = loadWrong();
     if (list.length === 0) {
       updateWrongButton(0);
-      showHomeMessage('틀린 것이 없어요. 묶음을 골라 풀어 보세요.');
+      showMessage(wrongMessageEl, '틀린 것이 없어요. 묶음을 골라 풀어 보세요.');
       return;
     }
     startRound(TERMS.filter((t) => list.includes(t.번호)));
   }
 
-  // 첫 화면 안내 문구. 창이 작아 문구가 화면 밖에 있으면 보이는 곳까지만 스크롤한다
-  function showHomeMessage(text) {
-    homeMessageEl.textContent = text;
-    homeMessageEl.hidden = false;
-    homeMessageEl.scrollIntoView({ block: 'nearest' });
+  // "시험" 버튼: 67개 전체를 섞어 한 판. 이 판에만 시험 표시를 붙인다 (결정 사항 5·12)
+  function startExam() {
+    startRound(TERMS, true);
+  }
+
+  // 첫 화면 안내 문구를 el 자리에 띄운다. 창이 작아 문구가 화면 밖에 있으면 보이는 곳까지만 스크롤한다
+  function showMessage(el, text) {
+    el.textContent = text;
+    el.hidden = false;
+    el.scrollIntoView({ block: 'nearest' });
   }
 
   // "처음으로": 틀린 것 개수를 새로 세어 첫 화면을 다시 그린다
@@ -273,18 +385,19 @@
     showScreen(homeScreen);
   }
 
-  // "기록 초기화": 확인창을 띄우고, 확인하면 틀린 것 목록을 지운다 (결정 사항 7·8).
-  // 시험 기록 지우기와 확인창 문구는 기능 3에서 고친다
+  // "기록 초기화": 확인창을 띄우고, 확인하면 틀린 것 목록과 시험 기록을 지운다 (결정 사항 7·8).
+  // 하나가 실패해도 다른 하나는 지우고, 첫 화면은 저장 공간에 남은 대로 다시 그린다
   function resetRecords() {
-    if (!window.confirm('틀린 것 목록을 모두 지울까요?')) return;
-    const removed = removeWrong();
+    if (!window.confirm('틀린 것 목록과 시험 기록을 모두 지울까요?')) return;
+    const wrongRemoved = removeWrong();
+    const examsRemoved = removeExams();
     renderHome();
-    if (!removed) showHomeMessage('삭제하지 못했어요. 다시 시도해 주세요.');
+    if (!wrongRemoved || !examsRemoved) showMessage(homeMessageEl, '삭제하지 못했어요. 다시 시도해 주세요.');
   }
 
-  // 한 판 시작: 고른 묶음의 용어를 섞어서 한 문제씩 낸다
-  function startRound(terms) {
-    round = { questions: shuffle(terms), index: 0, correct: 0, wrongNumbers: [], answered: false };
+  // 한 판 시작: 고른 묶음의 용어를 섞어서 한 문제씩 낸다. 시험이면 isExam = true
+  function startRound(terms, isExam = false) {
+    round = { questions: shuffle(terms), index: 0, correct: 0, wrongNumbers: [], answered: false, isExam, examSaved: true };
     showScreen(quizScreen);
     renderQuestion();
   }
@@ -332,6 +445,12 @@
     }
     const saved = recordAnswer(term.번호, isCorrect);
 
+    // 시험의 마지막(67번째) 답을 고른 순간 시험이 끝난 것으로 보고 기록을 한 번 저장한다 (결정 사항 5·12).
+    // 그 전에 창을 닫거나 새로고침하면 시험 기록은 남지 않는다
+    if (round.isExam && round.index === round.questions.length - 1) {
+      round.examSaved = addExam(round.correct, round.questions.length);
+    }
+
     verdictEl.textContent = isCorrect ? '맞음' : '틀림';
     verdictEl.className = isCorrect ? 'verdict correct' : 'verdict wrong';
     answerEl.textContent = term.뜻;
@@ -353,16 +472,28 @@
     }
   }
 
-  // 결과: 점수(맞은 수 / 문제 수)와 틀린 용어 번호(terms.md의 번호, 작은 순)
+  // 결과: 점수(맞은 수 / 문제 수)와 틀린 용어 번호(terms.md의 번호, 작은 순).
+  // 시험일 때만 점수 뒤에 "점"을 붙이고, 통과/미통과(굵은 글씨, 색 없음)와 기록 저장 실패 줄을 보인다.
+  // 결과 화면은 모든 판이 같이 쓰므로, 시험이 아닌 판에서는 이 줄들을 매번 숨긴다
   function renderResult() {
-    scoreEl.textContent = round.correct + ' / ' + round.questions.length;
+    const total = round.questions.length;
+    scoreEl.textContent = round.correct + ' / ' + total + (round.isExam ? '점' : '');
     const wrong = round.wrongNumbers.slice().sort((a, b) => a - b);
     wrongListEl.textContent = wrong.length > 0 ? wrong.join(', ') : '없음';
+    if (round.isExam) {
+      passResultEl.textContent = round.correct >= PASS_SCORE ? '통과' : '미통과 (통과선 ' + PASS_SCORE + '점)';
+      passResultEl.hidden = false;
+      examSaveErrorEl.hidden = round.examSaved;
+    } else {
+      passResultEl.hidden = true;
+      examSaveErrorEl.hidden = true;
+    }
     showScreen(resultScreen);
   }
 
   onClick(nextBtn, goNext);
   onClick(homeBtn, goHome);
+  onClick(examBtn, startExam);
   onClick(resetBtn, resetRecords);
 
   renderHome();
