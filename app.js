@@ -1,4 +1,4 @@
-// 용어 퀴즈 — 기능 1(묶음 고르기 + 객관식)
+// 용어 퀴즈 — 기능 1(묶음 고르기 + 객관식) + 기능 2(틀린 것만 다시 보기)
 (() => {
   'use strict';
 
@@ -105,11 +105,65 @@
   const scoreEl = document.getElementById('score');
   const wrongListEl = document.getElementById('wrong-list');
   const homeBtn = document.getElementById('home-button');
+  const homeMessageEl = document.getElementById('home-message');
+  const resetBtn = document.getElementById('reset-button');
+  const saveErrorEl = document.getElementById('save-error');
 
-  // 지금 풀고 있는 한 판. 묶음을 고를 때마다 새로 만든다 (저장하지 않는다)
+  // 지금 풀고 있는 한 판. 묶음을 고를 때마다 새로 만든다
+  // (한 판 자체는 저장하지 않는다. 틀린 것 목록은 답해서 바뀔 때 바로 저장한다)
   // { questions: 섞은 용어 목록, index: 지금 몇 번째 문제(0부터), correct: 맞은 수,
-  //   wrongNumbers: 틀린 용어 번호들, answered: 지금 문제에 답했나 }
+  //   wrongNumbers: 이번 판에 틀린 용어 번호들, answered: 지금 문제에 답했나 }
   let round = null;
+
+  // ===== 틀린 것 목록 저장 (localStorage) =====
+
+  // 저장 키. 더블클릭으로 연 다른 앱과 브라우저 저장 공간을 같이 쓰므로 "term-quiz."로 시작한다. 이름은 바꾸지 않는다
+  const WRONG_KEY = 'term-quiz.wrong';
+
+  // 저장된 틀린 것 목록(용어 번호 배열, 예: [5, 62])을 읽는다.
+  // 저장 공간을 못 쓰거나 값이 망가졌으면 빈 목록. TERMS에 있는 번호만 겹치지 않게 번호 순으로 남긴다
+  function loadWrong() {
+    let saved;
+    try {
+      const raw = localStorage.getItem(WRONG_KEY);
+      saved = raw ? JSON.parse(raw) : [];
+    } catch (err) {
+      return [];
+    }
+    if (!Array.isArray(saved)) return [];
+    return TERMS.filter((t) => saved.includes(t.번호)).map((t) => t.번호);
+  }
+
+  // 목록을 JSON(목록을 글자로 바꾼 모양)으로 저장한다. 성공하면 true, 실패하면 false
+  function saveWrong(list) {
+    try {
+      localStorage.setItem(WRONG_KEY, JSON.stringify(list));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // 이 앱의 칸 하나만 지운다 (저장 공간 전체를 비우면 다른 앱 기록까지 지워진다). 성공하면 true
+  function removeWrong() {
+    try {
+      localStorage.removeItem(WRONG_KEY);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // 채점 결과를 목록에 반영한다 (결정 사항 4): 틀리면 넣고(이미 있으면 그대로), 맞추면 뺀다.
+  // 어느 모드든 answer()가 이것을 부른다. 다른 탭에서 바꾼 것을 덮어쓰지 않도록 쓰기 직전에 다시 읽고,
+  // 목록이 바뀔 때만 저장한다. 저장에 실패하면 false
+  function recordAnswer(number, isCorrect) {
+    const list = loadWrong();
+    const has = list.includes(number);
+    if (isCorrect && has) return saveWrong(list.filter((n) => n !== number));
+    if (!isCorrect && !has) return saveWrong(list.concat(number).sort((a, b) => a - b));
+    return true;
+  }
 
   // ===== 섞기와 보기 만들기 =====
 
@@ -158,8 +212,12 @@
     window.scrollTo(0, 0);
   }
 
-  // 첫 화면: 묶음 1~6 버튼(번호, 이름, 개수)과 전체 버튼 (결정 사항 2).
-  // 개수는 TERMS에서 센다. 화면 글자는 모두 textContent로 넣는다
+  // 첫 화면의 "틀린 것 (N개)" 버튼. renderHome()이 새로 만든다
+  let wrongButtonEl = null;
+
+  // 첫 화면: 묶음 1~6 버튼(번호, 이름, 개수), 전체 버튼, 틀린 것 버튼 (결정 사항 2).
+  // 개수는 TERMS와 저장된 목록에서 센다. 처음 열 때, "처음으로"를 누를 때, 초기화한 뒤에 다시 그린다.
+  // 화면 글자는 모두 textContent로 넣는다
   function renderHome() {
     groupButtonsEl.replaceChildren();
     GROUPS.forEach((group) => {
@@ -167,6 +225,18 @@
       addGroupButton(group.묶음 + ' ' + group.이름 + ' (' + terms.length + ')', terms);
     });
     addGroupButton('전체 (' + TERMS.length + ')', TERMS);
+
+    wrongButtonEl = document.createElement('button');
+    wrongButtonEl.type = 'button';
+    onClick(wrongButtonEl, startWrongRound);
+    groupButtonsEl.appendChild(wrongButtonEl);
+    updateWrongButton(loadWrong().length);
+
+    homeMessageEl.hidden = true;
+  }
+
+  function updateWrongButton(count) {
+    wrongButtonEl.textContent = '틀린 것 (' + count + '개)';
   }
 
   function addGroupButton(label, terms) {
@@ -175,6 +245,41 @@
     button.textContent = label;
     onClick(button, () => startRound(terms));
     groupButtonsEl.appendChild(button);
+  }
+
+  // "틀린 것" 버튼: 누르는 순간의 목록을 다시 읽어 그 용어들만 한 판으로 낸다.
+  // 풀면서 맞춘 용어는 목록에서 빠지지만, 이번 판의 문제는 처음 그대로 간다.
+  // 0개면 버튼 글자를 (0개)로 고치고 안내 문구를 띄운다 (버튼을 다시 만들지 않아 키보드 위치가 그대로다)
+  function startWrongRound() {
+    const list = loadWrong();
+    if (list.length === 0) {
+      updateWrongButton(0);
+      showHomeMessage('틀린 것이 없어요. 묶음을 골라 풀어 보세요.');
+      return;
+    }
+    startRound(TERMS.filter((t) => list.includes(t.번호)));
+  }
+
+  // 첫 화면 안내 문구. 창이 작아 문구가 화면 밖에 있으면 보이는 곳까지만 스크롤한다
+  function showHomeMessage(text) {
+    homeMessageEl.textContent = text;
+    homeMessageEl.hidden = false;
+    homeMessageEl.scrollIntoView({ block: 'nearest' });
+  }
+
+  // "처음으로": 틀린 것 개수를 새로 세어 첫 화면을 다시 그린다
+  function goHome() {
+    renderHome();
+    showScreen(homeScreen);
+  }
+
+  // "기록 초기화": 확인창을 띄우고, 확인하면 틀린 것 목록을 지운다 (결정 사항 7·8).
+  // 시험 기록 지우기와 확인창 문구는 기능 3에서 고친다
+  function resetRecords() {
+    if (!window.confirm('틀린 것 목록을 모두 지울까요?')) return;
+    const removed = removeWrong();
+    renderHome();
+    if (!removed) showHomeMessage('삭제하지 못했어요. 다시 시도해 주세요.');
   }
 
   // 한 판 시작: 고른 묶음의 용어를 섞어서 한 문제씩 낸다
@@ -210,6 +315,7 @@
   }
 
   // 보기를 고르면 바로 맞음/틀림, 정답 뜻, 비유를 보여 주고 "다음" 버튼을 꺼낸다.
+  // 틀린 것 목록도 바로 고쳐 저장한다 (중간에 창을 닫아도 그때까지 남는다).
   // 처음 고른 것만 채점하도록 보기 4개를 잠근다
   function answer(term, choice, buttons) {
     if (round.answered) return;
@@ -224,11 +330,13 @@
     } else {
       round.wrongNumbers.push(term.번호);
     }
+    const saved = recordAnswer(term.번호, isCorrect);
 
     verdictEl.textContent = isCorrect ? '맞음' : '틀림';
     verdictEl.className = isCorrect ? 'verdict correct' : 'verdict wrong';
     answerEl.textContent = term.뜻;
     analogyEl.textContent = term.비유;
+    saveErrorEl.hidden = saved;
     feedbackEl.hidden = false;
     nextBtn.hidden = false;
     nextBtn.focus();
@@ -254,7 +362,8 @@
   }
 
   onClick(nextBtn, goNext);
-  onClick(homeBtn, () => showScreen(homeScreen));
+  onClick(homeBtn, goHome);
+  onClick(resetBtn, resetRecords);
 
   renderHome();
   showScreen(homeScreen);
