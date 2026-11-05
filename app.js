@@ -1,4 +1,4 @@
-// 용어 퀴즈 v2 — 기능 1(공부: 67개 전체, 틀리면 맞출 때까지 반복) + 기능 2(시험)
+// 용어 퀴즈 v2 — 기능 1(공부: 67개 전체, 틀리면 맞출 때까지 반복) + 기능 2(시험) + 기능 3(문제 화면 이동)
 (() => {
   'use strict';
 
@@ -85,6 +85,8 @@
   const resultScreen = document.getElementById('result-screen');
   const studyResultScreen = document.getElementById('study-result-screen');
   const progressEl = document.getElementById('progress');
+  const prevBtn = document.getElementById('prev-button');
+  const quitBtn = document.getElementById('quit-button');
   const termEl = document.getElementById('term');
   const lookOnlyEl = document.getElementById('look-only');
   const choicesEl = document.getElementById('choices');
@@ -116,6 +118,8 @@
   //        examSaved: 시험 기록 저장에 성공했나 }
   // 공부: { queue: 줄(차례를 기다리는 용어들, 맨 앞이 지금 문제), solved: 푼 문제 수(반복 포함),
   //        counts: 용어 번호별로 나온 횟수, answered, isExam: false, correct·wrongNumbers(채점 코드가 같이 씀) }
+  // 둘 다: slots: 지나간 문제 목록(나온 순서대로 { term, choices: 보기 4개 그 순서, picked: 고른 용어 번호 또는 null },
+  //        맨 끝 칸이 현재 문제), view: 화면에 보이는 칸 번호 (결정 사항 8). 메모리에만 두고 저장하지 않는다
   let round = null;
 
   // ===== 시험 기록 저장 (localStorage) =====
@@ -218,7 +222,8 @@
 
   // 보기 4개 = 정답 1 + 오답 3 (결정 사항 1).
   // 오답은 정답 용어와 같은 묶음의 다른 용어 뜻에서 뽑는다 (공부·시험 모두 67개 표에서 같은 묶음만 고른다).
-  // 문제를 그릴 때마다 새로 뽑고 4개의 순서도 새로 섞으므로, 공부에서 다시 나온 용어도 보기가 새로 섞인다
+  // 새 문제를 낼 때마다(newQuestion) 새로 뽑고 4개의 순서도 새로 섞으므로, 공부에서 다시 나온 용어도 보기가 새로 섞인다.
+  // 뽑은 보기는 그 문제 칸에 저장해 두고, 같은 문제를 다시 그릴 때(답한 뒤, 이전 문제·다음)는 그대로 쓴다 (결정 사항 8)
   function makeChoices(term) {
     const sameGroup = TERMS.filter((t) => t.묶음 === term.묶음 && t.번호 !== term.번호);
     const wrongs = shuffle(sameGroup).slice(0, 3);
@@ -279,9 +284,12 @@
 
   // "공부 시작": 67개를 섞어 줄을 만들고 맨 앞부터 낸다 (결정 사항 2). 누를 때마다 새로 시작한다
   function startStudy() {
-    round = { queue: shuffle(TERMS), solved: 0, counts: {}, correct: 0, wrongNumbers: [], answered: false, isExam: false };
+    round = {
+      queue: shuffle(TERMS), solved: 0, counts: {}, correct: 0, wrongNumbers: [], answered: false, isExam: false,
+      slots: [], view: 0,
+    };
     showScreen(quizScreen);
-    renderQuestion();
+    newQuestion();
   }
 
   // "시험" 버튼: 67개 전체를 섞어 한 판. 이 판에만 시험 표시를 붙인다 (결정 사항 5·12)
@@ -313,46 +321,75 @@
 
   // 시험 한 판 시작: 67개를 섞어서 한 번씩 낸다 (startExam이 isExam = true로 부른다)
   function startRound(terms, isExam = false) {
-    round = { questions: shuffle(terms), index: 0, correct: 0, wrongNumbers: [], answered: false, isExam, examSaved: true };
+    round = {
+      questions: shuffle(terms), index: 0, correct: 0, wrongNumbers: [], answered: false, isExam, examSaved: true,
+      slots: [], view: 0,
+    };
     showScreen(quizScreen);
-    renderQuestion();
+    newQuestion();
   }
 
-  // 문제 하나: 용어(알아보기만이면 옆에 "(알아보기만)")와 뜻 4개.
-  // 방향은 "용어를 보고 뜻 고르기" 하나뿐이다 (결정 사항 5). 공부면 줄 맨 앞 용어를 낸다
-  function renderQuestion() {
+  // 새 문제 하나: 용어(알아보기만이면 옆에 "(알아보기만)")와 뜻 4개. 방향은 "용어를 보고 뜻 고르기" 하나뿐이다 (결정 사항 5).
+  // 공부면 줄 맨 앞 용어를 낸다. 보기는 여기서 한 번만 뽑아 지나간 문제 목록 맨 끝에 넣는다 (결정 사항 8).
+  // 다시 그릴 때는 저장된 보기를 그대로 쓰므로, 지난 문제를 보고 돌아와도 보기 순서가 바뀌지 않는다
+  function newQuestion() {
     const term = round.isExam ? round.questions[round.index] : round.queue[0];
     round.answered = false;
+    round.slots.push({ term, choices: makeChoices(term), picked: null });
+    round.view = round.slots.length - 1;
+    drawSlot();
+    window.scrollTo(0, 0);
+  }
+
+  // 목록에서 화면에 보이는 칸(round.view)을 그린다. 맨 끝 칸이 현재 문제이고, 그 앞은 지난 문제다.
+  // 아직 답하지 않은 현재 문제만 보기를 누를 수 있다. 답한 문제는 보기를 잠그고, 정답 보기와 틀리게 고른 보기를 표시하고,
+  // 맞음/틀림·정답 뜻·비유와 "다음"을 보인다. 그리기만 하고 줄·점수·기록은 바꾸지 않는다
+  function drawSlot() {
+    const slot = round.slots[round.view];
+    const term = slot.term;
     renderProgress();
     termEl.textContent = term.용어;
     lookOnlyEl.hidden = !term.알아보기만;
 
     choicesEl.replaceChildren();
-    const buttons = [];
-    makeChoices(term).forEach((choice) => {
+    slot.choices.forEach((choice) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'choice';
       button.textContent = choice.뜻;
-      onClick(button, () => answer(term, choice, buttons));
-      buttons.push(button);
+      if (slot.picked === null) {
+        onClick(button, () => answer(slot, choice));
+      } else {
+        button.disabled = true;
+        if (choice.번호 === term.번호) button.className = 'choice answer-choice';
+        else if (choice.번호 === slot.picked) button.className = 'choice wrong-pick';
+      }
       choicesEl.appendChild(button);
     });
 
-    feedbackEl.hidden = true;
-    nextBtn.hidden = true;
-    window.scrollTo(0, 0);
+    if (slot.picked === null) {
+      feedbackEl.hidden = true;
+      nextBtn.hidden = true;
+    } else {
+      const isCorrect = slot.picked === term.번호;
+      verdictEl.textContent = isCorrect ? '맞음' : '틀림';
+      verdictEl.className = isCorrect ? 'verdict correct' : 'verdict wrong';
+      answerEl.textContent = term.뜻;
+      analogyEl.textContent = term.비유;
+      feedbackEl.hidden = false;
+      nextBtn.hidden = false;
+    }
+    prevBtn.disabled = round.view === 0;
   }
 
   // 보기를 고르면 바로 맞음/틀림, 정답 뜻, 비유를 보여 주고 "다음" 버튼을 꺼낸다.
   // 공부면 줄을 고치고 진행 표시를 바로 바꾼다 (결정 사항 2·3).
-  // 처음 고른 것만 채점하도록 보기 4개를 잠근다
-  function answer(term, choice, buttons) {
-    if (round.answered) return;
+  // 처음 고른 것만 채점한다: 고른 것을 칸에 적고, 보기 4개를 잠근 채 다시 그린다
+  function answer(slot, choice) {
+    if (round.answered || slot.picked !== null) return;
     round.answered = true;
-    buttons.forEach((button) => {
-      button.disabled = true;
-    });
+    slot.picked = choice.번호;
+    const term = slot.term;
 
     const isCorrect = choice.번호 === term.번호;
     if (isCorrect) {
@@ -370,30 +407,67 @@
     // 공부: 푼 문제 수와 나온 횟수를 세고 줄을 고친다
     if (!round.isExam) studyAnswer(isCorrect);
 
-    verdictEl.textContent = isCorrect ? '맞음' : '틀림';
-    verdictEl.className = isCorrect ? 'verdict correct' : 'verdict wrong';
-    answerEl.textContent = term.뜻;
-    analogyEl.textContent = term.비유;
-    feedbackEl.hidden = false;
-    nextBtn.hidden = false;
+    drawSlot();
     nextBtn.focus();
   }
 
-  // "다음": 다음 문제로 간다. 마지막 문제 뒤에는 결과 화면
-  // (공부는 줄 맨 앞 용어를 내고, 줄이 비었으면 공부 결과 화면으로 간다)
+  // "다음": 지난 문제를 보는 중이면 한 칸 앞으로 간다 (결정 사항 8). 현재 문제라면 다음 문제로 가고,
+  // 마지막 문제 뒤에는 결과 화면 (공부는 줄 맨 앞 용어를 내고, 줄이 비었으면 공부 결과 화면으로 간다)
   function goNext() {
-    if (!round || !round.answered) return;
+    if (!round) return;
+    if (round.view < round.slots.length - 1) {
+      round.view += 1;
+      drawSlot();
+      scrollToQuestionTop();
+      return;
+    }
+    if (!round.answered) return;
     if (!round.isExam) {
-      if (round.queue.length > 0) renderQuestion();
+      if (round.queue.length > 0) newQuestion();
       else renderStudyResult();
       return;
     }
     round.index += 1;
     if (round.index < round.questions.length) {
-      renderQuestion();
+      newQuestion();
     } else {
       renderResult();
     }
+  }
+
+  // "이전 문제" (결정 사항 8): 한 칸 뒤의 문제를 그린다. 첫 문제에서는 버튼이 꺼져 있다.
+  // 첫 칸에 닿아 버튼이 꺼지면 키보드 위치를 "다음"으로 옮긴다 (꺼진 버튼에서는 Enter가 먹지 않으므로).
+  // 이때 화면은 움직이지 않게 한다 (preventScroll: 포커스만 옮기고, 화면 아래쪽 "다음"까지 스크롤하지 않는다)
+  function goPrev() {
+    if (!round || round.view === 0) return;
+    round.view -= 1;
+    drawSlot();
+    scrollToQuestionTop();
+    if (prevBtn.disabled) nextBtn.focus({ preventScroll: true });
+  }
+
+  // 다른 칸으로 옮길 때 문제 맨 위가 보이게 올린다. 위 줄이 붙어 있던 자리에서 움직이지 않을 만큼만 올린다
+  // (맨 꼭대기까지 올리면 위 줄이 아래로 내려가서, 같은 자리를 다시 누르면 버튼을 비켜 간다)
+  function scrollToQuestionTop() {
+    window.scrollTo(0, Math.min(window.scrollY, quizScreen.offsetTop));
+  }
+
+  // "처음으로" (결정 사항 7): 확인창을 띄우고, 확인하면 지금 판을 버리고 첫 화면으로 간다 (시험 중이면 기록이 남지 않는다).
+  // 시험 67번째 답을 고른 뒤 기록 저장에 성공했다면 기록이 이미 남아 있으므로, 그 사실을 알리는 문구로 묻는다
+  // (저장에 실패했으면 보통 문구로 묻는다. 결과 화면의 "저장하지 못했어요" 안내를 보지 않고 나가게 되므로).
+  // 취소하면 아무것도 다시 그리지 않고 화면도 움직이지 않는다 (보이던 화면 그대로)
+  function quitRound() {
+    if (!round) return;
+    const examDone = round.isExam && round.answered && round.index === round.questions.length - 1 && round.examSaved;
+    const question = examDone
+      ? '시험 기록은 저장되었어요. 결과를 보지 않고 처음 화면으로 갈까요?'
+      : '지금까지 푼 것이 사라집니다. 처음 화면으로 갈까요?';
+    if (!window.confirm(question)) {
+      if (!nextBtn.hidden) nextBtn.focus({ preventScroll: true });
+      return;
+    }
+    round = null;
+    goHome();
   }
 
   // 진행 표시 (결정 사항 3): 공부일 때만 "남은 용어 N개 · 푼 문제 M". 시험 중에는 숨긴다
@@ -457,6 +531,8 @@
   onClick(studyBtn, startStudy);
   onClick(examBtn, startExam);
   onClick(resetBtn, resetRecords);
+  onClick(prevBtn, goPrev);
+  onClick(quitBtn, quitRound);
 
   renderHome();
   showScreen(homeScreen);

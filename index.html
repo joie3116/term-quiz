@@ -21,9 +21,13 @@
       <button type="button" id="reset-button" class="reset-button">기록 초기화</button>
     </section>
 
-    <!-- 문제 화면: 진행 표시(공부일 때만) + 용어 하나 + 뜻 4개 -->
+    <!-- 문제 화면: 위 줄(이전 문제 · 진행 표시는 공부일 때만 · 처음으로) + 용어 하나 + 뜻 4개 (결정 사항 7·8) -->
     <section id="quiz-screen" hidden>
-      <p id="progress" class="progress" hidden></p>
+      <div class="quiz-bar">
+        <button type="button" id="prev-button" class="bar-button" disabled>이전 문제</button>
+        <p id="progress" class="progress" hidden></p>
+        <button type="button" id="quit-button" class="bar-button quit-button">처음으로</button>
+      </div>
       <h2 class="question">
         <span id="term"></span>
         <span id="look-only" class="look-only" hidden>(알아보기만)</span>
