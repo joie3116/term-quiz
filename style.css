@@ -106,7 +106,7 @@ button:disabled {
   min-height: calc(100vh - 48px);
 }
 
-/* 문제 화면 맨 위 줄: 이전 문제 · 진행 표시(공부일 때만) · 처음으로 (결정 사항 7·8).
+/* 문제 화면 맨 위 줄: 이전 문제 · 진행 표시 · 처음으로 (결정 사항 3·7·8).
    답한 뒤 "다음"으로 화면이 내려가도 보이게 화면 위쪽에 붙어 있게 한다 (sticky = 스크롤해도 그 자리에 붙어 있음) */
 .quiz-bar {
   position: sticky;
@@ -240,4 +240,21 @@ button:disabled {
 .repeat-list {
   margin: 0;
   padding-left: 24px;
+}
+
+/* 시험 결과: 틀린 용어 목록 (결정 사항 6). 한 칸 = 윗줄 굵은 "번호 용어" + 아랫줄 정답 뜻.
+   뜻이 길어 여러 줄이 되므로 칸 사이를 띄우고, 한국어는 낱말 단위로 줄을 바꾼다 */
+.wrong-list {
+  margin: 0;
+  padding-left: 24px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.wrong-list li {
+  margin-bottom: 12px;
+}
+
+.wrong-term {
+  font-weight: bold;
 }

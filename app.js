@@ -97,6 +97,7 @@
   const nextBtn = document.getElementById('next-button');
   const scoreEl = document.getElementById('score');
   const wrongListEl = document.getElementById('wrong-list');
+  const wrongNoneEl = document.getElementById('wrong-none');
   const homeBtn = document.getElementById('home-button');
   const homeMessageEl = document.getElementById('home-message');
   const studyBtn = document.getElementById('study-button');
@@ -127,10 +128,10 @@
   // 지울 때도 이 앱의 칸만 지운다 (저장 공간 전체를 비우면 다른 앱 기록까지 지워진다).
   // v2에서 쓰는 저장 칸은 시험 기록 하나다. 공부 결과는 저장하지 않는다
 
-  // 시험 기록 저장 키 (결정 사항 13). 이름은 바꾸지 않는다
+  // 시험 기록 저장 키 (SPEC 기술 제약). 이름은 바꾸지 않는다
   const EXAMS_KEY = 'term-quiz.exams';
 
-  // 통과선 (결정 사항 5: 57점 = 85%). 이 점수 이상이면 통과
+  // 통과선 (결정 사항 6: 57점 = 85%). 이 점수 이상이면 통과
   const PASS_SCORE = 57;
 
   // 저장된 시험 기록(회차 배열, 오래된 것부터)을 읽는다. 저장 공간을 못 쓰거나 값이 망가졌으면 빈 목록.
@@ -292,9 +293,15 @@
     newQuestion();
   }
 
-  // "시험" 버튼: 67개 전체를 섞어 한 판. 이 판에만 시험 표시를 붙인다 (결정 사항 5·12)
+  // "시험": 67개 전체를 섞어 한 번씩 낸다 (반복 없음, 결정 사항 6). 이 판에만 시험 표시(isExam)를 붙인다.
+  // 누를 때마다 새로 시작한다
   function startExam() {
-    startRound(TERMS, true);
+    round = {
+      questions: shuffle(TERMS), index: 0, correct: 0, wrongNumbers: [], answered: false, isExam: true, examSaved: true,
+      slots: [], view: 0,
+    };
+    showScreen(quizScreen);
+    newQuestion();
   }
 
   // 첫 화면 안내 문구를 el 자리에 띄운다. 창이 작아 문구가 화면 밖에 있으면 보이는 곳까지만 스크롤한다
@@ -317,16 +324,6 @@
     const examsRemoved = removeExams();
     renderHome();
     if (!examsRemoved) showMessage(homeMessageEl, '삭제하지 못했어요. 다시 시도해 주세요.');
-  }
-
-  // 시험 한 판 시작: 67개를 섞어서 한 번씩 낸다 (startExam이 isExam = true로 부른다)
-  function startRound(terms, isExam = false) {
-    round = {
-      questions: shuffle(terms), index: 0, correct: 0, wrongNumbers: [], answered: false, isExam, examSaved: true,
-      slots: [], view: 0,
-    };
-    showScreen(quizScreen);
-    newQuestion();
   }
 
   // 새 문제 하나: 용어(알아보기만이면 옆에 "(알아보기만)")와 뜻 4개. 방향은 "용어를 보고 뜻 고르기" 하나뿐이다 (결정 사항 5).
@@ -398,7 +395,7 @@
       round.wrongNumbers.push(term.번호);
     }
 
-    // 시험의 마지막(67번째) 답을 고른 순간 시험이 끝난 것으로 보고 기록을 한 번 저장한다 (결정 사항 5·12).
+    // 시험의 마지막(67번째) 답을 고른 순간 시험이 끝난 것으로 보고 기록을 한 번 저장한다 (결정 사항 6, v1 결정 12).
     // 그 전에 창을 닫거나 새로고침하면 시험 기록은 남지 않는다
     if (round.isExam && round.index === round.questions.length - 1) {
       round.examSaved = addExam(round.correct, round.questions.length);
@@ -470,10 +467,12 @@
     goHome();
   }
 
-  // 진행 표시 (결정 사항 3): 공부일 때만 "남은 용어 N개 · 푼 문제 M". 시험 중에는 숨긴다
+  // 진행 표시 (결정 사항 3): 공부는 "남은 용어 N개 · 푼 문제 M", 시험은 "M / 67" (M = 지금 몇 번째 문제, 1부터).
+  // 둘 다 지금 진행을 보인다. "이전 문제"로 지난 문제를 보는 동안에도 보고 있는 칸이 아니라 지금 값이다
   function renderProgress() {
-    progressEl.hidden = round.isExam;
-    if (!round.isExam) progressEl.textContent = '남은 용어 ' + round.queue.length + '개 · 푼 문제 ' + round.solved;
+    progressEl.textContent = round.isExam
+      ? (round.index + 1) + ' / ' + round.questions.length
+      : '남은 용어 ' + round.queue.length + '개 · 푼 문제 ' + round.solved;
   }
 
   // 공부에서 답 하나 (결정 사항 2): 줄 맨 앞(지금 문제)을 빼서, 맞으면 끝내고 틀리면 줄 맨 뒤에 다시 세운다.
@@ -506,22 +505,31 @@
     showScreen(studyResultScreen);
   }
 
-  // 결과: 점수(맞은 수 / 문제 수)와 틀린 용어 번호(terms.md의 번호, 작은 순).
-  // 시험일 때만 점수 뒤에 "점"을 붙이고, 통과/미통과(굵은 글씨, 색 없음)와 기록 저장 실패 줄을 보인다.
-  // 결과 화면은 모든 판이 같이 쓰므로, 시험이 아닌 판에서는 이 줄들을 매번 숨긴다
+  // 시험 결과 (결정 사항 6): 점수("60 / 67점"), 통과/미통과(굵은 글씨, 색 없음), 기록 저장에 실패했으면 그 안내 줄.
+  // 틀린 용어는 번호 순(terms.md의 번호, 작은 순)으로 한 칸씩: 윗줄에 번호·용어, 아랫줄에 정답 뜻.
+  // 하나도 틀리지 않았으면 목록 대신 "없음"
   function renderResult() {
     const total = round.questions.length;
-    scoreEl.textContent = round.correct + ' / ' + total + (round.isExam ? '점' : '');
-    const wrong = round.wrongNumbers.slice().sort((a, b) => a - b);
-    wrongListEl.textContent = wrong.length > 0 ? wrong.join(', ') : '없음';
-    if (round.isExam) {
-      passResultEl.textContent = round.correct >= PASS_SCORE ? '통과' : '미통과 (통과선 ' + PASS_SCORE + '점)';
-      passResultEl.hidden = false;
-      examSaveErrorEl.hidden = round.examSaved;
-    } else {
-      passResultEl.hidden = true;
-      examSaveErrorEl.hidden = true;
-    }
+    scoreEl.textContent = round.correct + ' / ' + total + '점';
+    passResultEl.textContent = round.correct >= PASS_SCORE ? '통과' : '미통과 (통과선 ' + PASS_SCORE + '점)';
+    examSaveErrorEl.hidden = round.examSaved;
+
+    const wrong = TERMS.filter((t) => round.wrongNumbers.includes(t.번호));
+    wrongListEl.replaceChildren();
+    wrong.forEach((t) => {
+      const item = document.createElement('li');
+      const head = document.createElement('div');
+      head.className = 'wrong-term';
+      head.textContent = t.번호 + ' ' + t.용어;
+      const meaning = document.createElement('div');
+      meaning.className = 'wrong-meaning';
+      meaning.textContent = t.뜻;
+      item.appendChild(head);
+      item.appendChild(meaning);
+      wrongListEl.appendChild(item);
+    });
+    wrongListEl.hidden = wrong.length === 0;
+    wrongNoneEl.hidden = wrong.length > 0;
     showScreen(resultScreen);
   }
 

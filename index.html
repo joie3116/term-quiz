@@ -21,11 +21,11 @@
       <button type="button" id="reset-button" class="reset-button">기록 초기화</button>
     </section>
 
-    <!-- 문제 화면: 위 줄(이전 문제 · 진행 표시는 공부일 때만 · 처음으로) + 용어 하나 + 뜻 4개 (결정 사항 7·8) -->
+    <!-- 문제 화면: 위 줄(이전 문제 · 진행 표시 · 처음으로) + 용어 하나 + 뜻 4개 (결정 사항 3·7·8) -->
     <section id="quiz-screen" hidden>
       <div class="quiz-bar">
         <button type="button" id="prev-button" class="bar-button" disabled>이전 문제</button>
-        <p id="progress" class="progress" hidden></p>
+        <p id="progress" class="progress"></p>
         <button type="button" id="quit-button" class="bar-button quit-button">처음으로</button>
       </div>
       <h2 class="question">
@@ -42,12 +42,13 @@
       <button type="button" id="next-button" class="next-button" hidden>다음</button>
     </section>
 
-    <!-- 결과 화면: 점수와 틀린 용어 번호. 시험일 때만 통과/미통과와 기록 저장 실패 줄이 보인다 -->
+    <!-- 시험 결과 화면: 점수, 통과/미통과, 틀린 용어(번호 순, 한 칸 = 번호·용어 + 정답 뜻), 기록 저장 실패 줄 (결정 사항 6) -->
     <section id="result-screen" hidden>
       <h2>결과</h2>
       <p class="score"><span class="label">점수</span> <span id="score"></span></p>
-      <p id="pass-result" class="pass-result" hidden></p>
-      <p><span class="label">틀린 용어 번호</span> <span id="wrong-list"></span></p>
+      <p id="pass-result" class="pass-result"></p>
+      <p><span class="label">틀린 용어</span> <span id="wrong-none" hidden>없음</span></p>
+      <ul id="wrong-list" class="wrong-list"></ul>
       <p id="exam-save-error" class="save-error" hidden>시험 기록을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.</p>
       <button type="button" id="home-button" class="home-button">처음으로</button>
     </section>
