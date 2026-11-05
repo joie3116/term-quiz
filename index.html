@@ -7,25 +7,23 @@
 </head>
 <body>
   <main>
-    <!-- 첫 화면: 묶음·전체·틀린 것 버튼(app.js가 만든다), 틀린 것 0개 안내, 시험 버튼, 초기화 실패 안내, 시험 기록, 기록 초기화 -->
+    <!-- 첫 화면: 공부 시작, 시험, 초기화 실패 안내, 시험 기록, 기록 초기화 (결정 사항 10) -->
     <section id="home-screen">
       <h1>용어 퀴즈</h1>
-      <p class="guide">묶음을 하나 고르세요.</p>
-      <div id="group-buttons" class="group-buttons"></div>
-      <!-- 틀린 것 0개 안내는 "틀린 것" 버튼 바로 아래, 시험 버튼 위에 뜬다 (결정 사항 10) -->
-      <p id="wrong-message" class="home-message" hidden></p>
-      <button type="button" id="exam-button" class="exam-button">시험</button>
+      <button type="button" id="study-button" class="study-button">공부 시작 (67개, 맞출 때까지)</button>
+      <button type="button" id="exam-button" class="exam-button">시험 (67문제, 57점 통과)</button>
       <p id="home-message" class="home-message" hidden></p>
 
       <h2 class="exam-title">시험 기록</h2>
-      <p id="exam-empty" class="exam-empty" hidden>아직 시험 기록이 없어요.</p>
+      <p id="exam-empty" class="exam-empty" hidden>아직 시험 기록이 없습니다</p>
       <ul id="exam-list" class="exam-list"></ul>
 
       <button type="button" id="reset-button" class="reset-button">기록 초기화</button>
     </section>
 
-    <!-- 문제 화면: 용어 하나 + 뜻 4개 -->
+    <!-- 문제 화면: 진행 표시(공부일 때만) + 용어 하나 + 뜻 4개 -->
     <section id="quiz-screen" hidden>
+      <p id="progress" class="progress" hidden></p>
       <h2 class="question">
         <span id="term"></span>
         <span id="look-only" class="look-only" hidden>(알아보기만)</span>
@@ -36,7 +34,6 @@
         <p id="verdict" class="verdict"></p>
         <p><span class="label">정답 뜻</span> <span id="answer"></span></p>
         <p><span class="label">비유</span> <span id="analogy"></span></p>
-        <p id="save-error" class="save-error" hidden>저장에 실패했어요. 브라우저 저장 공간을 확인해 주세요.</p>
       </div>
       <button type="button" id="next-button" class="next-button" hidden>다음</button>
     </section>
@@ -49,6 +46,16 @@
       <p><span class="label">틀린 용어 번호</span> <span id="wrong-list"></span></p>
       <p id="exam-save-error" class="save-error" hidden>시험 기록을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.</p>
       <button type="button" id="home-button" class="home-button">처음으로</button>
+    </section>
+
+    <!-- 공부 결과 화면: 푼 문제 수, 한 번에 맞춘 개수, 두 번 이상 나온 용어 (결정 사항 4). 저장하지 않는다 -->
+    <section id="study-result-screen" hidden>
+      <h2>공부 결과</h2>
+      <p class="score"><span class="label">푼 문제</span> <span id="study-solved"></span></p>
+      <p class="score"><span class="label">한 번에 맞춘 개수</span> <span id="study-first"></span></p>
+      <p><span class="label">두 번 이상 나온 용어</span> <span id="study-repeat-none" hidden>없음</span></p>
+      <ul id="study-repeat-list" class="repeat-list"></ul>
+      <button type="button" id="study-home-button" class="home-button">처음으로</button>
     </section>
   </main>
 

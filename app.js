@@ -1,4 +1,4 @@
-// 용어 퀴즈 — 기능 1(묶음 고르기 + 객관식) + 기능 2(틀린 것만 다시 보기) + 기능 3(시험)
+// 용어 퀴즈 v2 — 기능 1(공부: 67개 전체, 틀리면 맞출 때까지 반복) + 기능 2(시험)
 (() => {
   'use strict';
 
@@ -6,17 +6,7 @@
   // terms.md의 표를 글자 그대로 옮겼다. 원본은 terms.md이고, 여기 글자는 terms.md와 한 글자도 다르지 않게 둔다.
   // 코드 안의 \\ 는 화면에서 \ 하나로 보인다 (JS 문자열 안에 \ 를 적는 방법).
 
-  // 묶음 이름 (terms.md "묶음 이름" 표). 개수는 아래 TERMS에서 센다
-  const GROUPS = [
-    { 묶음: 1, 이름: '터미널과 파일' },
-    { 묶음: 2, 이름: '웹 페이지의 재료' },
-    { 묶음: 3, 이름: '개념 — 식당 비유' },
-    { 묶음: 4, 이름: 'Git과 GitHub' },
-    { 묶음: 5, 이름: 'AI 도구와 일하는 방식' },
-    { 묶음: 6, 이름: '배포' },
-  ];
-
-  // 용어 67개 (terms.md "용어 67개" 표). 한 줄 = 용어 하나
+  // 용어 67개 (terms.md "용어 67개" 표). 한 줄 = 용어 하나. 묶음 번호는 오답 보기를 뽑을 때만 쓴다
   // 알아보기만: true면 문제 화면에서 용어 옆에 "(알아보기만)"을 붙인다
   const TERMS = [
     { 번호: 1, 묶음: 1, 용어: '터미널 (PowerShell)', 뜻: '마우스 대신 글자로 컴퓨터에 명령을 보내고, 결과도 글자로 돌려받는 창이다. git이나 Claude Code처럼 아이콘이 없는 도구는 이 창에서만 돌아간다.', 비유: '0단계', 알아보기만: false },
@@ -93,7 +83,8 @@
   const homeScreen = document.getElementById('home-screen');
   const quizScreen = document.getElementById('quiz-screen');
   const resultScreen = document.getElementById('result-screen');
-  const groupButtonsEl = document.getElementById('group-buttons');
+  const studyResultScreen = document.getElementById('study-result-screen');
+  const progressEl = document.getElementById('progress');
   const termEl = document.getElementById('term');
   const lookOnlyEl = document.getElementById('look-only');
   const choicesEl = document.getElementById('choices');
@@ -106,73 +97,31 @@
   const wrongListEl = document.getElementById('wrong-list');
   const homeBtn = document.getElementById('home-button');
   const homeMessageEl = document.getElementById('home-message');
-  const wrongMessageEl = document.getElementById('wrong-message');
+  const studyBtn = document.getElementById('study-button');
   const examBtn = document.getElementById('exam-button');
   const resetBtn = document.getElementById('reset-button');
-  const saveErrorEl = document.getElementById('save-error');
+  const studySolvedEl = document.getElementById('study-solved');
+  const studyFirstEl = document.getElementById('study-first');
+  const studyRepeatNoneEl = document.getElementById('study-repeat-none');
+  const studyRepeatListEl = document.getElementById('study-repeat-list');
+  const studyHomeBtn = document.getElementById('study-home-button');
   const passResultEl = document.getElementById('pass-result');
   const examSaveErrorEl = document.getElementById('exam-save-error');
   const examListEl = document.getElementById('exam-list');
   const examEmptyEl = document.getElementById('exam-empty');
 
-  // 지금 풀고 있는 한 판. 묶음을 고를 때마다 새로 만든다
-  // (한 판 자체는 저장하지 않는다. 틀린 것 목록은 답해서 바뀔 때 바로 저장하고, 시험 기록은 시험이 끝날 때 저장한다)
-  // { questions: 섞은 용어 목록, index: 지금 몇 번째 문제(0부터), correct: 맞은 수,
-  //   wrongNumbers: 이번 판에 틀린 용어 번호들, answered: 지금 문제에 답했나,
-  //   isExam: 시험인가, examSaved: 시험 기록 저장에 성공했나 }
+  // 지금 풀고 있는 한 판. "공부 시작"이나 "시험"을 누를 때마다 새로 만든다 (한 판은 저장하지 않는다)
+  // 시험: { questions: 섞은 67개, index: 지금 몇 번째 문제(0부터), correct: 맞은 수,
+  //        wrongNumbers: 틀린 용어 번호들, answered: 지금 문제에 답했나, isExam: true,
+  //        examSaved: 시험 기록 저장에 성공했나 }
+  // 공부: { queue: 줄(차례를 기다리는 용어들, 맨 앞이 지금 문제), solved: 푼 문제 수(반복 포함),
+  //        counts: 용어 번호별로 나온 횟수, answered, isExam: false, correct·wrongNumbers(채점 코드가 같이 씀) }
   let round = null;
 
-  // ===== 틀린 것 목록 저장 (localStorage) =====
-
-  // 저장 키. 더블클릭으로 연 다른 앱과 브라우저 저장 공간을 같이 쓰므로 "term-quiz."로 시작한다. 이름은 바꾸지 않는다
-  const WRONG_KEY = 'term-quiz.wrong';
-
-  // 저장된 틀린 것 목록(용어 번호 배열, 예: [5, 62])을 읽는다.
-  // 저장 공간을 못 쓰거나 값이 망가졌으면 빈 목록. TERMS에 있는 번호만 겹치지 않게 번호 순으로 남긴다
-  function loadWrong() {
-    let saved;
-    try {
-      const raw = localStorage.getItem(WRONG_KEY);
-      saved = raw ? JSON.parse(raw) : [];
-    } catch (err) {
-      return [];
-    }
-    if (!Array.isArray(saved)) return [];
-    return TERMS.filter((t) => saved.includes(t.번호)).map((t) => t.번호);
-  }
-
-  // 목록을 JSON(목록을 글자로 바꾼 모양)으로 저장한다. 성공하면 true, 실패하면 false
-  function saveWrong(list) {
-    try {
-      localStorage.setItem(WRONG_KEY, JSON.stringify(list));
-      return true;
-    } catch (err) {
-      return false;
-    }
-  }
-
-  // 이 앱의 칸 하나만 지운다 (저장 공간 전체를 비우면 다른 앱 기록까지 지워진다). 성공하면 true
-  function removeWrong() {
-    try {
-      localStorage.removeItem(WRONG_KEY);
-      return true;
-    } catch (err) {
-      return false;
-    }
-  }
-
-  // 채점 결과를 목록에 반영한다 (결정 사항 4): 틀리면 넣고(이미 있으면 그대로), 맞추면 뺀다.
-  // 어느 모드든 answer()가 이것을 부른다. 다른 탭에서 바꾼 것을 덮어쓰지 않도록 쓰기 직전에 다시 읽고,
-  // 목록이 바뀔 때만 저장한다. 저장에 실패하면 false
-  function recordAnswer(number, isCorrect) {
-    const list = loadWrong();
-    const has = list.includes(number);
-    if (isCorrect && has) return saveWrong(list.filter((n) => n !== number));
-    if (!isCorrect && !has) return saveWrong(list.concat(number).sort((a, b) => a - b));
-    return true;
-  }
-
   // ===== 시험 기록 저장 (localStorage) =====
+  // 저장 키는 "term-quiz."로 시작한다 (더블클릭으로 연 다른 앱과 브라우저 저장 공간을 같이 쓰기 때문).
+  // 지울 때도 이 앱의 칸만 지운다 (저장 공간 전체를 비우면 다른 앱 기록까지 지워진다).
+  // v2에서 쓰는 저장 칸은 시험 기록 하나다. 공부 결과는 저장하지 않는다
 
   // 시험 기록 저장 키 (결정 사항 13). 이름은 바꾸지 않는다
   const EXAMS_KEY = 'term-quiz.exams';
@@ -268,8 +217,8 @@
   }
 
   // 보기 4개 = 정답 1 + 오답 3 (결정 사항 1).
-  // 오답은 정답 용어와 같은 묶음의 다른 용어 뜻에서 뽑는다. "전체"로 풀 때도 67개 표에서 같은 묶음만 고른다.
-  // 4개의 순서도 문제마다 새로 섞는다
+  // 오답은 정답 용어와 같은 묶음의 다른 용어 뜻에서 뽑는다 (공부·시험 모두 67개 표에서 같은 묶음만 고른다).
+  // 문제를 그릴 때마다 새로 뽑고 4개의 순서도 새로 섞으므로, 공부에서 다시 나온 용어도 보기가 새로 섞인다
   function makeChoices(term) {
     const sameGroup = TERMS.filter((t) => t.묶음 === term.묶음 && t.번호 !== term.번호);
     const wrongs = shuffle(sameGroup).slice(0, 3);
@@ -282,7 +231,12 @@
   // 클릭 한 번에 화면이 바로 바뀌기 때문에, 더블클릭하면 두 번째 클릭이 새로 나타난 버튼
   // (예: 첫 문제의 보기)을 눌러 버린다. event.detail은 연달아 누른 횟수다
   // (마우스 한 번 = 1, 더블클릭의 두 번째 = 2, 키보드 Enter·Space = 0)
+  // 두 번째 누름은 포커스(키보드 위치)도 옮기지 않게 막는다. 그러지 않으면 새로 나타난 버튼에 포커스가 가서,
+  // 이어서 Space·Enter를 누르면 그 버튼이 눌린다 (예: 공부 결과의 "처음으로" → 결과가 확인 없이 사라짐)
   function onClick(button, handler) {
+    button.addEventListener('mousedown', (event) => {
+      if (event.detail > 1) event.preventDefault();
+    });
     button.addEventListener('click', (event) => {
       if (event.detail > 1) return;
       handler();
@@ -291,45 +245,23 @@
 
   // ===== 화면 =====
 
-  // 세 화면(첫 화면, 문제, 결과) 중 하나만 보이게 하고 맨 위로 올린다
+  // 네 화면(첫 화면, 문제, 시험 결과, 공부 결과) 중 하나만 보이게 하고 맨 위로 올린다
   function showScreen(screen) {
     homeScreen.hidden = screen !== homeScreen;
     quizScreen.hidden = screen !== quizScreen;
     resultScreen.hidden = screen !== resultScreen;
+    studyResultScreen.hidden = screen !== studyResultScreen;
     window.scrollTo(0, 0);
   }
 
-  // 첫 화면의 "틀린 것 (N개)" 버튼. renderHome()이 새로 만든다
-  let wrongButtonEl = null;
-
-  // 첫 화면: 묶음 1~6 버튼(번호, 이름, 개수), 전체 버튼, 틀린 것 버튼 (결정 사항 2)과 시험 기록.
-  // 시험 버튼은 index.html에 고정해 두었다 (틀린 것 0개 안내가 틀린 것 버튼과 시험 버튼 사이에 뜨도록).
-  // 개수는 TERMS와 저장된 목록에서 센다. 처음 열 때, "처음으로"를 누를 때, 초기화한 뒤에 다시 그린다.
-  // 화면 글자는 모두 textContent로 넣는다
+  // 첫 화면 (결정 사항 10): "공부 시작"·"시험"·"기록 초기화" 버튼은 index.html에 고정되어 있고,
+  // 여기서는 시험 기록을 다시 그린다. 처음 열 때, "처음으로"를 누를 때, 초기화한 뒤에 다시 그린다
   function renderHome() {
-    groupButtonsEl.replaceChildren();
-    GROUPS.forEach((group) => {
-      const terms = TERMS.filter((t) => t.묶음 === group.묶음);
-      addGroupButton(group.묶음 + ' ' + group.이름 + ' (' + terms.length + ')', terms);
-    });
-    addGroupButton('전체 (' + TERMS.length + ')', TERMS);
-
-    wrongButtonEl = document.createElement('button');
-    wrongButtonEl.type = 'button';
-    onClick(wrongButtonEl, startWrongRound);
-    groupButtonsEl.appendChild(wrongButtonEl);
-    updateWrongButton(loadWrong().length);
-
     renderExamList();
-    wrongMessageEl.hidden = true;
     homeMessageEl.hidden = true;
   }
 
-  function updateWrongButton(count) {
-    wrongButtonEl.textContent = '틀린 것 (' + count + '개)';
-  }
-
-  // 첫 화면 아래 "시험 기록": 최근 것이 위로 한 줄씩 (결정 사항 5·13). 없으면 "아직 시험 기록이 없어요."
+  // 첫 화면 아래 "시험 기록": 최근 것이 위로 한 줄씩 (결정 사항 6·10). 없으면 "아직 시험 기록이 없습니다"
   function renderExamList() {
     const exams = loadExams();
     examListEl.replaceChildren();
@@ -345,26 +277,11 @@
     examEmptyEl.hidden = exams.length > 0;
   }
 
-  function addGroupButton(label, terms) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = label;
-    onClick(button, () => startRound(terms));
-    groupButtonsEl.appendChild(button);
-  }
-
-  // "틀린 것" 버튼: 누르는 순간의 목록을 다시 읽어 그 용어들만 한 판으로 낸다.
-  // 풀면서 맞춘 용어는 목록에서 빠지지만, 이번 판의 문제는 처음 그대로 간다.
-  // 0개면 버튼 글자를 (0개)로 고치고 그 버튼 바로 아래에 안내 문구를 띄운다
-  // (버튼을 다시 만들지 않아 키보드 위치가 그대로다. 문구가 시험 버튼 위에 있어, 문구로 스크롤해도 시험 버튼이 마우스 아래로 오지 않는다)
-  function startWrongRound() {
-    const list = loadWrong();
-    if (list.length === 0) {
-      updateWrongButton(0);
-      showMessage(wrongMessageEl, '틀린 것이 없어요. 묶음을 골라 풀어 보세요.');
-      return;
-    }
-    startRound(TERMS.filter((t) => list.includes(t.번호)));
+  // "공부 시작": 67개를 섞어 줄을 만들고 맨 앞부터 낸다 (결정 사항 2). 누를 때마다 새로 시작한다
+  function startStudy() {
+    round = { queue: shuffle(TERMS), solved: 0, counts: {}, correct: 0, wrongNumbers: [], answered: false, isExam: false };
+    showScreen(quizScreen);
+    renderQuestion();
   }
 
   // "시험" 버튼: 67개 전체를 섞어 한 판. 이 판에만 시험 표시를 붙인다 (결정 사항 5·12)
@@ -379,23 +296,22 @@
     el.scrollIntoView({ block: 'nearest' });
   }
 
-  // "처음으로": 틀린 것 개수를 새로 세어 첫 화면을 다시 그린다
+  // "처음으로": 첫 화면을 다시 그린다 (시험 기록을 새로 읽는다)
   function goHome() {
     renderHome();
     showScreen(homeScreen);
   }
 
-  // "기록 초기화": 확인창을 띄우고, 확인하면 틀린 것 목록과 시험 기록을 지운다 (결정 사항 7·8).
-  // 하나가 실패해도 다른 하나는 지우고, 첫 화면은 저장 공간에 남은 대로 다시 그린다
+  // "기록 초기화": 확인창을 띄우고, 확인하면 시험 기록을 지운다 (결정 사항 11).
+  // 지우지 못하면 첫 화면에 안내 문구를 띄운다
   function resetRecords() {
-    if (!window.confirm('틀린 것 목록과 시험 기록을 모두 지울까요?')) return;
-    const wrongRemoved = removeWrong();
+    if (!window.confirm('시험 기록을 모두 지울까요?')) return;
     const examsRemoved = removeExams();
     renderHome();
-    if (!wrongRemoved || !examsRemoved) showMessage(homeMessageEl, '삭제하지 못했어요. 다시 시도해 주세요.');
+    if (!examsRemoved) showMessage(homeMessageEl, '삭제하지 못했어요. 다시 시도해 주세요.');
   }
 
-  // 한 판 시작: 고른 묶음의 용어를 섞어서 한 문제씩 낸다. 시험이면 isExam = true
+  // 시험 한 판 시작: 67개를 섞어서 한 번씩 낸다 (startExam이 isExam = true로 부른다)
   function startRound(terms, isExam = false) {
     round = { questions: shuffle(terms), index: 0, correct: 0, wrongNumbers: [], answered: false, isExam, examSaved: true };
     showScreen(quizScreen);
@@ -403,10 +319,11 @@
   }
 
   // 문제 하나: 용어(알아보기만이면 옆에 "(알아보기만)")와 뜻 4개.
-  // 방향은 "용어를 보고 뜻 고르기" 하나뿐이다 (결정 사항 3)
+  // 방향은 "용어를 보고 뜻 고르기" 하나뿐이다 (결정 사항 5). 공부면 줄 맨 앞 용어를 낸다
   function renderQuestion() {
-    const term = round.questions[round.index];
+    const term = round.isExam ? round.questions[round.index] : round.queue[0];
     round.answered = false;
+    renderProgress();
     termEl.textContent = term.용어;
     lookOnlyEl.hidden = !term.알아보기만;
 
@@ -428,7 +345,7 @@
   }
 
   // 보기를 고르면 바로 맞음/틀림, 정답 뜻, 비유를 보여 주고 "다음" 버튼을 꺼낸다.
-  // 틀린 것 목록도 바로 고쳐 저장한다 (중간에 창을 닫아도 그때까지 남는다).
+  // 공부면 줄을 고치고 진행 표시를 바로 바꾼다 (결정 사항 2·3).
   // 처음 고른 것만 채점하도록 보기 4개를 잠근다
   function answer(term, choice, buttons) {
     if (round.answered) return;
@@ -443,7 +360,6 @@
     } else {
       round.wrongNumbers.push(term.번호);
     }
-    const saved = recordAnswer(term.번호, isCorrect);
 
     // 시험의 마지막(67번째) 답을 고른 순간 시험이 끝난 것으로 보고 기록을 한 번 저장한다 (결정 사항 5·12).
     // 그 전에 창을 닫거나 새로고침하면 시험 기록은 남지 않는다
@@ -451,25 +367,69 @@
       round.examSaved = addExam(round.correct, round.questions.length);
     }
 
+    // 공부: 푼 문제 수와 나온 횟수를 세고 줄을 고친다
+    if (!round.isExam) studyAnswer(isCorrect);
+
     verdictEl.textContent = isCorrect ? '맞음' : '틀림';
     verdictEl.className = isCorrect ? 'verdict correct' : 'verdict wrong';
     answerEl.textContent = term.뜻;
     analogyEl.textContent = term.비유;
-    saveErrorEl.hidden = saved;
     feedbackEl.hidden = false;
     nextBtn.hidden = false;
     nextBtn.focus();
   }
 
   // "다음": 다음 문제로 간다. 마지막 문제 뒤에는 결과 화면
+  // (공부는 줄 맨 앞 용어를 내고, 줄이 비었으면 공부 결과 화면으로 간다)
   function goNext() {
     if (!round || !round.answered) return;
+    if (!round.isExam) {
+      if (round.queue.length > 0) renderQuestion();
+      else renderStudyResult();
+      return;
+    }
     round.index += 1;
     if (round.index < round.questions.length) {
       renderQuestion();
     } else {
       renderResult();
     }
+  }
+
+  // 진행 표시 (결정 사항 3): 공부일 때만 "남은 용어 N개 · 푼 문제 M". 시험 중에는 숨긴다
+  function renderProgress() {
+    progressEl.hidden = round.isExam;
+    if (!round.isExam) progressEl.textContent = '남은 용어 ' + round.queue.length + '개 · 푼 문제 ' + round.solved;
+  }
+
+  // 공부에서 답 하나 (결정 사항 2): 줄 맨 앞(지금 문제)을 빼서, 맞으면 끝내고 틀리면 줄 맨 뒤에 다시 세운다.
+  // 하나 남았을 때 틀리면 그 용어가 바로 다시 나온다. 푼 문제 수와 그 용어가 나온 횟수를 세고, 진행 표시를 바로 바꾼다
+  function studyAnswer(isCorrect) {
+    const head = round.queue.shift();
+    round.solved += 1;
+    round.counts[head.번호] = (round.counts[head.번호] || 0) + 1;
+    if (!isCorrect) round.queue.push(head);
+    renderProgress();
+  }
+
+  // 공부 결과 (결정 사항 4): 푼 문제 수(반복 포함), 한 번에 맞춘 개수(한 번만 나온 용어 수) / 67,
+  // 두 번 이상 나온 용어(번호·용어, 많이 나온 순, 같으면 번호 순, 없으면 "없음"). 공부 결과는 저장하지 않는다
+  function renderStudyResult() {
+    const firstTry = TERMS.filter((t) => round.counts[t.번호] === 1).length;
+    const repeated = TERMS.filter((t) => round.counts[t.번호] >= 2).sort(
+      (a, b) => round.counts[b.번호] - round.counts[a.번호] || a.번호 - b.번호
+    );
+    studySolvedEl.textContent = String(round.solved);
+    studyFirstEl.textContent = firstTry + ' / ' + TERMS.length;
+    studyRepeatListEl.replaceChildren();
+    repeated.forEach((t) => {
+      const item = document.createElement('li');
+      item.textContent = t.번호 + ' ' + t.용어;
+      studyRepeatListEl.appendChild(item);
+    });
+    studyRepeatListEl.hidden = repeated.length === 0;
+    studyRepeatNoneEl.hidden = repeated.length > 0;
+    showScreen(studyResultScreen);
   }
 
   // 결과: 점수(맞은 수 / 문제 수)와 틀린 용어 번호(terms.md의 번호, 작은 순).
@@ -493,6 +453,8 @@
 
   onClick(nextBtn, goNext);
   onClick(homeBtn, goHome);
+  onClick(studyHomeBtn, goHome);
+  onClick(studyBtn, startStudy);
   onClick(examBtn, startExam);
   onClick(resetBtn, resetRecords);
 
