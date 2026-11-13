@@ -1,4 +1,4 @@
-// 용어 퀴즈 v2 — 기능 1(공부: 67개 전체, 틀리면 맞출 때까지 반복) + 기능 2(시험) + 기능 3(문제 화면 이동)
+// 용어 퀴즈 v3 — 기능 1(공부: 67개 전체, 틀리면 맞출 때까지 반복. 거꾸로 공부 포함) + 기능 2(시험) + 기능 3(문제 화면 이동)
 (() => {
   'use strict';
 
@@ -7,7 +7,7 @@
   // 코드 안의 \\ 는 화면에서 \ 하나로 보인다 (JS 문자열 안에 \ 를 적는 방법).
 
   // 용어 67개 (terms.md "용어 67개" 표). 한 줄 = 용어 하나. 묶음 번호는 오답 보기를 뽑을 때만 쓴다
-  // 알아보기만: true면 문제 화면에서 용어 옆에 "(알아보기만)"을 붙인다
+  // 알아보기만: true면 문제 화면에서 용어 옆에 "(알아보기만)"을 붙인다 (거꾸로 공부는 고른 뒤 정답 용어 옆에, 결정 사항 12)
   const TERMS = [
     { 번호: 1, 묶음: 1, 용어: '터미널 (PowerShell)', 뜻: '마우스 대신 글자로 컴퓨터에 명령을 보내고, 결과도 글자로 돌려받는 창이다. git이나 Claude Code처럼 아이콘이 없는 도구는 이 창에서만 돌아간다.', 비유: '0단계', 알아보기만: false },
     { 번호: 2, 묶음: 1, 용어: '명령줄 맨 앞 `PS C:\\...>`', 뜻: '지금 내가 어느 폴더에 서 있는지 알려 주는 표시다. 명령은 여기 적힌 폴더 안에서 실행되므로, 치기 전에 먼저 읽는다.', 비유: '위치는 여기서 본다', 알아보기만: false },
@@ -87,12 +87,15 @@
   const progressEl = document.getElementById('progress');
   const prevBtn = document.getElementById('prev-button');
   const quitBtn = document.getElementById('quit-button');
+  const questionEl = document.getElementById('question');
   const termEl = document.getElementById('term');
   const lookOnlyEl = document.getElementById('look-only');
   const choicesEl = document.getElementById('choices');
   const feedbackEl = document.getElementById('feedback');
   const verdictEl = document.getElementById('verdict');
+  const answerLabelEl = document.getElementById('answer-label');
   const answerEl = document.getElementById('answer');
+  const answerLookOnlyEl = document.getElementById('answer-look-only');
   const analogyEl = document.getElementById('analogy');
   const nextBtn = document.getElementById('next-button');
   const scoreEl = document.getElementById('score');
@@ -101,6 +104,7 @@
   const homeBtn = document.getElementById('home-button');
   const homeMessageEl = document.getElementById('home-message');
   const studyBtn = document.getElementById('study-button');
+  const reverseBtn = document.getElementById('reverse-button');
   const examBtn = document.getElementById('exam-button');
   const resetBtn = document.getElementById('reset-button');
   const studySolvedEl = document.getElementById('study-solved');
@@ -113,12 +117,13 @@
   const examListEl = document.getElementById('exam-list');
   const examEmptyEl = document.getElementById('exam-empty');
 
-  // 지금 풀고 있는 한 판. "공부 시작"이나 "시험"을 누를 때마다 새로 만든다 (한 판은 저장하지 않는다)
+  // 지금 풀고 있는 한 판. "공부 시작"·"거꾸로 공부"·"시험"을 누를 때마다 새로 만든다 (한 판은 저장하지 않는다)
   // 시험: { questions: 섞은 67개, index: 지금 몇 번째 문제(0부터), correct: 맞은 수,
   //        wrongNumbers: 틀린 용어 번호들, answered: 지금 문제에 답했나, isExam: true,
   //        examSaved: 시험 기록 저장에 성공했나 }
   // 공부: { queue: 줄(차례를 기다리는 용어들, 맨 앞이 지금 문제), solved: 푼 문제 수(반복 포함),
-  //        counts: 용어 번호별로 나온 횟수, answered, isExam: false, correct·wrongNumbers(채점 코드가 같이 씀) }
+  //        counts: 용어 번호별로 나온 횟수, answered, isExam: false, correct·wrongNumbers(채점 코드가 같이 씀),
+  //        reverse: 거꾸로 공부면 true (뜻을 보고 용어 고르기, 결정 사항 5·12). 줄·채점·결과는 공부 시작과 같다 }
   // 둘 다: slots: 지나간 문제 목록(나온 순서대로 { term, choices: 보기 4개 그 순서, picked: 고른 용어 번호 또는 null },
   //        맨 끝 칸이 현재 문제), view: 화면에 보이는 칸 번호 (결정 사항 8). 메모리에만 두고 저장하지 않는다
   let round = null;
@@ -126,7 +131,7 @@
   // ===== 시험 기록 저장 (localStorage) =====
   // 저장 키는 "term-quiz."로 시작한다 (더블클릭으로 연 다른 앱과 브라우저 저장 공간을 같이 쓰기 때문).
   // 지울 때도 이 앱의 칸만 지운다 (저장 공간 전체를 비우면 다른 앱 기록까지 지워진다).
-  // v2에서 쓰는 저장 칸은 시험 기록 하나다. 공부 결과는 저장하지 않는다
+  // v3에서 쓰는 저장 칸도 시험 기록 하나다. 공부·거꾸로 공부 결과는 저장하지 않는다
 
   // 시험 기록 저장 키 (SPEC 기술 제약). 이름은 바꾸지 않는다
   const EXAMS_KEY = 'term-quiz.exams';
@@ -222,7 +227,8 @@
   }
 
   // 보기 4개 = 정답 1 + 오답 3 (결정 사항 1).
-  // 오답은 정답 용어와 같은 묶음의 다른 용어 뜻에서 뽑는다 (공부·시험 모두 67개 표에서 같은 묶음만 고른다).
+  // 오답은 정답 용어와 같은 묶음의 다른 용어에서 뽑는다 (공부·거꾸로 공부·시험 모두 67개 표에서 같은 묶음만 고른다).
+  // 보기 칸에 보이는 글은 공부 시작·시험이면 그 용어의 뜻, 거꾸로 공부면 용어 자체다 (그리는 곳은 drawSlot).
   // 새 문제를 낼 때마다(newQuestion) 새로 뽑고 4개의 순서도 새로 섞으므로, 공부에서 다시 나온 용어도 보기가 새로 섞인다.
   // 뽑은 보기는 그 문제 칸에 저장해 두고, 같은 문제를 다시 그릴 때(답한 뒤, 이전 문제·다음)는 그대로 쓴다 (결정 사항 8)
   function makeChoices(term) {
@@ -260,7 +266,7 @@
     window.scrollTo(0, 0);
   }
 
-  // 첫 화면 (결정 사항 10): "공부 시작"·"시험"·"기록 초기화" 버튼은 index.html에 고정되어 있고,
+  // 첫 화면 (결정 사항 10): "공부 시작"·"거꾸로 공부"·"시험"·"기록 초기화" 버튼은 index.html에 고정되어 있고,
   // 여기서는 시험 기록을 다시 그린다. 처음 열 때, "처음으로"를 누를 때, 초기화한 뒤에 다시 그린다
   function renderHome() {
     renderExamList();
@@ -283,14 +289,20 @@
     examEmptyEl.hidden = exams.length > 0;
   }
 
-  // "공부 시작": 67개를 섞어 줄을 만들고 맨 앞부터 낸다 (결정 사항 2). 누를 때마다 새로 시작한다
-  function startStudy() {
+  // "공부 시작": 67개를 섞어 줄을 만들고 맨 앞부터 낸다 (결정 사항 2). 누를 때마다 새로 시작한다.
+  // reverse가 true면 거꾸로 공부다: 줄·반복·진행·결과는 같고, 문제와 보기의 방향만 바뀐다 (결정 사항 5·12)
+  function startStudy(reverse = false) {
     round = {
       queue: shuffle(TERMS), solved: 0, counts: {}, correct: 0, wrongNumbers: [], answered: false, isExam: false,
-      slots: [], view: 0,
+      reverse: reverse === true, slots: [], view: 0,
     };
     showScreen(quizScreen);
     newQuestion();
+  }
+
+  // "거꾸로 공부": 뜻을 보고 용어 4개 중 고르는 공부 한 판을 시작한다 (결정 사항 12)
+  function startReverseStudy() {
+    startStudy(true);
   }
 
   // "시험": 67개 전체를 섞어 한 번씩 낸다 (반복 없음, 결정 사항 6). 이 판에만 시험 표시(isExam)를 붙인다.
@@ -326,7 +338,8 @@
     if (!examsRemoved) showMessage(homeMessageEl, '삭제하지 못했어요. 다시 시도해 주세요.');
   }
 
-  // 새 문제 하나: 용어(알아보기만이면 옆에 "(알아보기만)")와 뜻 4개. 방향은 "용어를 보고 뜻 고르기" 하나뿐이다 (결정 사항 5).
+  // 새 문제 하나: 공부 시작·시험은 용어(알아보기만이면 옆에 "(알아보기만)")와 뜻 4개,
+  // 거꾸로 공부는 뜻과 용어 4개다 (결정 사항 5·12). 한 판 안에서는 방향이 바뀌지 않는다.
   // 공부면 줄 맨 앞 용어를 낸다. 보기는 여기서 한 번만 뽑아 지나간 문제 목록 맨 끝에 넣는다 (결정 사항 8).
   // 다시 그릴 때는 저장된 보기를 그대로 쓰므로, 지난 문제를 보고 돌아와도 보기 순서가 바뀌지 않는다
   function newQuestion() {
@@ -340,20 +353,25 @@
 
   // 목록에서 화면에 보이는 칸(round.view)을 그린다. 맨 끝 칸이 현재 문제이고, 그 앞은 지난 문제다.
   // 아직 답하지 않은 현재 문제만 보기를 누를 수 있다. 답한 문제는 보기를 잠그고, 정답 보기와 틀리게 고른 보기를 표시하고,
-  // 맞음/틀림·정답 뜻·비유와 "다음"을 보인다. 그리기만 하고 줄·점수·기록은 바꾸지 않는다
+  // 맞음/틀림·정답 뜻(거꾸로 공부는 정답 용어)·비유와 "다음"을 보인다. 그리기만 하고 줄·점수·기록은 바꾸지 않는다.
+  // 거꾸로 공부면 문제 칸에 뜻(작은 보통 글씨), 보기에 용어를 넣고, "(알아보기만)"은 고른 뒤 정답 용어 옆에만 붙인다
+  // (보기에 붙이면 정답 힌트가 되므로, 결정 사항 12). 같은 칸들을 세 판이 함께 쓰므로, 문제 칸·보기는 그릴 때마다,
+  // 고른 뒤 칸(정답 뜻/정답 용어 글자와 그 옆 표시)은 그 칸을 보일 때마다 다시 정한다 (숨어 있는 동안 남은 값은 보이지 않는다)
   function drawSlot() {
     const slot = round.slots[round.view];
     const term = slot.term;
+    const reverse = round.reverse === true;
     renderProgress();
-    termEl.textContent = term.용어;
-    lookOnlyEl.hidden = !term.알아보기만;
+    questionEl.className = reverse ? 'question meaning-question' : 'question';
+    termEl.textContent = reverse ? term.뜻 : term.용어;
+    lookOnlyEl.hidden = reverse || !term.알아보기만;
 
     choicesEl.replaceChildren();
     slot.choices.forEach((choice) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'choice';
-      button.textContent = choice.뜻;
+      button.textContent = reverse ? choice.용어 : choice.뜻;
       if (slot.picked === null) {
         onClick(button, () => answer(slot, choice));
       } else {
@@ -371,7 +389,9 @@
       const isCorrect = slot.picked === term.번호;
       verdictEl.textContent = isCorrect ? '맞음' : '틀림';
       verdictEl.className = isCorrect ? 'verdict correct' : 'verdict wrong';
-      answerEl.textContent = term.뜻;
+      answerLabelEl.textContent = reverse ? '정답 용어' : '정답 뜻';
+      answerEl.textContent = reverse ? term.용어 : term.뜻;
+      answerLookOnlyEl.hidden = !(reverse && term.알아보기만);
       analogyEl.textContent = term.비유;
       feedbackEl.hidden = false;
       nextBtn.hidden = false;
@@ -379,7 +399,7 @@
     prevBtn.disabled = round.view === 0;
   }
 
-  // 보기를 고르면 바로 맞음/틀림, 정답 뜻, 비유를 보여 주고 "다음" 버튼을 꺼낸다.
+  // 보기를 고르면 바로 맞음/틀림, 정답 뜻(거꾸로 공부는 정답 용어), 비유를 보여 주고 "다음" 버튼을 꺼낸다.
   // 공부면 줄을 고치고 진행 표시를 바로 바꾼다 (결정 사항 2·3).
   // 처음 고른 것만 채점한다: 고른 것을 칸에 적고, 보기 4개를 잠근 채 다시 그린다
   function answer(slot, choice) {
@@ -537,6 +557,7 @@
   onClick(homeBtn, goHome);
   onClick(studyHomeBtn, goHome);
   onClick(studyBtn, startStudy);
+  onClick(reverseBtn, startReverseStudy);
   onClick(examBtn, startExam);
   onClick(resetBtn, resetRecords);
   onClick(prevBtn, goPrev);

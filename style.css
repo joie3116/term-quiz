@@ -58,8 +58,9 @@ button:disabled {
   border-color: #c8c8c8;
 }
 
-/* 첫 화면 큰 버튼 두 개: 공부 시작, 시험 (결정 사항 10) */
+/* 첫 화면 큰 버튼 세 개: 공부 시작, 거꾸로 공부, 시험 (결정 사항 10) */
 .study-button,
+.reverse-button,
 .exam-button {
   display: block;
   width: 100%;
@@ -144,11 +145,19 @@ button:disabled {
   border-color: #e3e3e3;
 }
 
-/* 문제 화면: 용어 */
+/* 문제 화면: 용어 (거꾸로 공부는 뜻, 아래 .meaning-question) */
 .question {
   font-size: 30px;
   word-break: keep-all;
   overflow-wrap: anywhere;
+}
+
+/* 거꾸로 공부의 문제 = 뜻 칸 전체(두세 줄 문장). 용어(30px 굵게)보다 작은 보통 글씨 (결정 사항 12).
+   text-wrap: balance = 여러 줄 글의 줄 길이를 고르게 맞춘다 (마지막 줄에 낱말 하나만 남지 않게) */
+.question.meaning-question {
+  font-size: 24px;
+  font-weight: normal;
+  text-wrap: balance;
 }
 
 .look-only {
@@ -182,7 +191,7 @@ button:disabled {
   box-shadow: 0 0 0 2px #cf222e;
 }
 
-/* 고른 뒤: 맞음/틀림, 정답 뜻, 비유 */
+/* 고른 뒤: 맞음/틀림, 정답 뜻(거꾸로 공부는 정답 용어), 비유 */
 .feedback {
   margin-top: 20px;
   padding: 12px 20px;
