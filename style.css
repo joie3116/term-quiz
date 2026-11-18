@@ -117,6 +117,29 @@ input:focus-visible {
   margin-top: 24px;
 }
 
+/* ===== 맨 위 줄 (모든 화면) ===== */
+
+/* 확인용 날짜 (?today=) */
+.test-date {
+  margin-bottom: 20px;
+  padding: 6px 14px;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* 멈춤 안내: 잘못된 확인용 주소, 기록을 읽거나 저장하지 못함 */
+.alert {
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  color: var(--paper);
+  background: var(--accent);
+  font-weight: 700;
+}
+
 /* ===== 처음 화면 ===== */
 
 .counts {

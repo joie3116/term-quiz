@@ -9,11 +9,16 @@
 </head>
 <body>
   <main>
-    <!-- 처음 화면 (SPEC 「처음 화면」). 요청 1에서는 [복습 시작]·[현황 보기]가 눌리지 않는다 -->
+    <!-- 확인용 날짜: 주소 끝에 ?today=YYYY-MM-DD를 붙였을 때만 모든 화면 맨 위에 보인다 (SPEC 「저장과 날짜」) -->
+    <p id="test-date" class="test-date" hidden></p>
+    <!-- 멈춤 안내: 확인용 주소가 잘못됐거나, 기록을 읽거나 저장하지 못했을 때 -->
+    <p id="alert" class="alert" role="alert" hidden></p>
+
+    <!-- 처음 화면 (SPEC 「처음 화면」). [현황 보기]는 요청 3까지 눌리지 않는다 -->
     <section id="home-screen">
       <h1>용어 퀴즈</h1>
       <p id="home-date" class="sub"></p>
-      <ul class="counts">
+      <ul id="home-counts" class="counts">
         <li id="home-review"></li>
         <li id="home-new"></li>
         <li id="home-mastered"></li>
