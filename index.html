@@ -3,71 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <title>용어 퀴즈</title>
+  <!-- 탭 아이콘을 따로 요청하지 않게 빈 아이콘을 둔다 (콘솔에 아이콘 404 에러가 남지 않게) -->
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main>
-    <!-- 첫 화면: 공부 시작, 거꾸로 공부, 시험, 초기화 실패 안내, 시험 기록, 기록 초기화 (결정 사항 10) -->
+    <!-- 처음 화면 (SPEC 「처음 화면」). 요청 1에서는 [복습 시작]·[현황 보기]가 눌리지 않는다 -->
     <section id="home-screen">
       <h1>용어 퀴즈</h1>
-      <button type="button" id="study-button" class="study-button">공부 시작 (67개, 맞출 때까지)</button>
-      <button type="button" id="reverse-button" class="reverse-button">거꾸로 공부 (뜻 보고 용어 고르기)</button>
-      <button type="button" id="exam-button" class="exam-button">시험 (67문제, 57점 통과)</button>
-      <p id="home-message" class="home-message" hidden></p>
-
-      <h2 class="exam-title">시험 기록</h2>
-      <p id="exam-empty" class="exam-empty" hidden>아직 시험 기록이 없습니다</p>
-      <ul id="exam-list" class="exam-list"></ul>
-
-      <button type="button" id="reset-button" class="reset-button">기록 초기화</button>
+      <p id="home-date" class="sub"></p>
+      <ul class="counts">
+        <li id="home-review"></li>
+        <li id="home-new"></li>
+        <li id="home-mastered"></li>
+      </ul>
+      <div class="button-row">
+        <button type="button" id="review-button" disabled>복습 시작</button>
+        <button type="button" id="learn-button">새 용어 배우기</button>
+        <button type="button" id="status-button" disabled>현황 보기</button>
+      </div>
     </section>
 
-    <!-- 문제 화면: 위 줄(이전 문제 · 진행 표시 · 처음으로) + 문제 하나 + 보기 4개 (결정 사항 3·7·8).
-         공부 시작·시험은 용어를 보고 뜻 4개 중 고르기, 거꾸로 공부는 뜻을 보고 용어 4개 중 고르기 (결정 사항 5·12).
-         #term 칸에는 공부 시작·시험이면 용어, 거꾸로 공부면 뜻이 들어간다 -->
+    <!-- 설명 화면 (SPEC 「새 용어 배우기」): 한 화면에 용어 하나 -->
+    <section id="learn-screen" hidden>
+      <p id="learn-progress" class="sub"></p>
+      <p id="learn-group" class="sub"></p>
+      <h2 id="learn-term" class="term-name"></h2>
+      <div id="learn-details" class="details"></div>
+      <button type="button" id="learn-next" class="primary">읽었어, 다음</button>
+    </section>
+
+    <!-- 문제 화면 (SPEC 「문제 화면」): 장면만 보여 주고 용어 이름은 숨긴다 -->
     <section id="quiz-screen" hidden>
-      <div class="quiz-bar">
-        <button type="button" id="prev-button" class="bar-button" disabled>이전 문제</button>
-        <p id="progress" class="progress"></p>
-        <button type="button" id="quit-button" class="bar-button quit-button">처음으로</button>
+      <div class="quiz-top">
+        <p id="quiz-remaining" class="sub"></p>
+        <button type="button" id="quiz-home">처음으로</button>
       </div>
-      <h2 id="question" class="question">
-        <span id="term"></span>
-        <span id="look-only" class="look-only" hidden>(알아보기만)</span>
-      </h2>
-      <div id="choices" class="choices"></div>
+      <p id="quiz-prompt" class="prompt"></p>
 
-      <!-- 고른 뒤: 맞음/틀림, 정답 뜻(거꾸로 공부는 정답 용어, 알아보기만이면 그 옆에 표시), 비유 -->
-      <div id="feedback" class="feedback" hidden>
+      <!-- 답 쓰기 -->
+      <div id="answer-area">
+        <textarea id="answer-input" class="answer-input" rows="6" maxlength="500" aria-label="답 쓰는 칸"></textarea>
+        <p id="answer-limit" class="limit" hidden>500자까지 쓸 수 있어</p>
+        <div class="button-row">
+          <button type="button" id="check-button" class="primary" disabled>답 확인</button>
+          <button type="button" id="dunno-button">모르겠어</button>
+        </div>
+      </div>
+
+      <!-- 채점 칸: [답 확인]이면 체크칸과 함께 열고, [모르겠어]면 체크칸 없이 연다 -->
+      <div id="grading-area" hidden>
+        <div id="my-answer-box">
+          <h3 class="label">내가 쓴 답</h3>
+          <p id="my-answer" class="my-answer"></p>
+        </div>
+        <h3 class="label">핵심 요소</h3>
+        <p id="grading-guide" class="guide">내 답에 이 뜻이 있으면 체크해. 말이 달라도 뜻이 같으면 돼.</p>
+        <ul id="unit-list" class="units"></ul>
+        <div id="wrong-box">
+          <h3 class="label">흔한 오답</h3>
+          <p id="wrong-text" class="wrong-text"></p>
+          <label id="wrong-label" class="check">
+            <input type="checkbox" id="wrong-check">
+            <span>내 답이 이쪽이었어</span>
+          </label>
+        </div>
+        <button type="button" id="grade-done" class="primary">채점 끝</button>
+      </div>
+
+      <!-- 판정과 그 카드의 용어 이름·설명 -->
+      <div id="result-area" hidden>
         <p id="verdict" class="verdict"></p>
-        <p><span id="answer-label" class="label">정답 뜻</span> <span id="answer"></span> <span id="answer-look-only" class="look-only" hidden>(알아보기만)</span></p>
-        <p><span class="label">비유</span> <span id="analogy"></span></p>
+        <h2 id="result-term" class="term-name"></h2>
+        <div id="result-details" class="details"></div>
+        <button type="button" id="next-card" class="primary">다음 카드</button>
       </div>
-      <button type="button" id="next-button" class="next-button" hidden>다음</button>
-    </section>
-
-    <!-- 시험 결과 화면: 점수, 통과/미통과, 틀린 용어(번호 순, 한 칸 = 번호·용어 + 정답 뜻), 기록 저장 실패 줄 (결정 사항 6) -->
-    <section id="result-screen" hidden>
-      <h2>결과</h2>
-      <p class="score"><span class="label">점수</span> <span id="score"></span></p>
-      <p id="pass-result" class="pass-result"></p>
-      <p><span class="label">틀린 용어</span> <span id="wrong-none" hidden>없음</span></p>
-      <ul id="wrong-list" class="wrong-list"></ul>
-      <p id="exam-save-error" class="save-error" hidden>시험 기록을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.</p>
-      <button type="button" id="home-button" class="home-button">처음으로</button>
-    </section>
-
-    <!-- 공부 결과 화면: 푼 문제 수, 한 번에 맞춘 개수, 두 번 이상 나온 용어 (결정 사항 4). 저장하지 않는다 -->
-    <section id="study-result-screen" hidden>
-      <h2>공부 결과</h2>
-      <p class="score"><span class="label">푼 문제</span> <span id="study-solved"></span></p>
-      <p class="score"><span class="label">한 번에 맞춘 개수</span> <span id="study-first"></span></p>
-      <p><span class="label">두 번 이상 나온 용어</span> <span id="study-repeat-none" hidden>없음</span></p>
-      <ul id="study-repeat-list" class="repeat-list"></ul>
-      <button type="button" id="study-home-button" class="home-button">처음으로</button>
     </section>
   </main>
 
+  <!-- 데이터를 app.js보다 먼저 불러온다 (SPEC 「데이터」) -->
+  <script src="terms-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
