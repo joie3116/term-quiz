@@ -14,7 +14,7 @@
     <!-- 멈춤 안내: 확인용 주소가 잘못됐거나, 기록을 읽거나 저장하지 못했을 때 -->
     <p id="alert" class="alert" role="alert" hidden></p>
 
-    <!-- 처음 화면 (SPEC 「처음 화면」). [현황 보기]는 요청 3까지 눌리지 않는다 -->
+    <!-- 처음 화면 (SPEC 「처음 화면」) -->
     <section id="home-screen">
       <h1>용어 퀴즈</h1>
       <p id="home-date" class="sub"></p>
@@ -26,7 +26,7 @@
       <div class="button-row">
         <button type="button" id="review-button" disabled>복습 시작</button>
         <button type="button" id="learn-button">새 용어 배우기</button>
-        <button type="button" id="status-button" disabled>현황 보기</button>
+        <button type="button" id="status-button">현황 보기</button>
       </div>
     </section>
 
@@ -83,6 +83,62 @@
         <h2 id="result-term" class="term-name"></h2>
         <div id="result-details" class="details"></div>
         <button type="button" id="next-card" class="primary">다음 카드</button>
+      </div>
+    </section>
+
+    <!-- 현황 화면 (SPEC 「현황 화면」): 요약 → 용어 표 → 오늘 쓴 답 → [기록 초기화]. 기록을 읽어서 보여 주기만 한다 -->
+    <section id="status-screen" hidden>
+      <div class="status-top">
+        <h1>현황</h1>
+        <button type="button" id="status-home">처음으로</button>
+      </div>
+
+      <!-- 요약: 익힌 용어 수, 상자별 카드 수 -->
+      <ul class="counts">
+        <li id="status-mastered"></li>
+      </ul>
+      <table class="box-table">
+        <caption id="box-caption" class="label"></caption>
+        <thead>
+          <tr>
+            <th scope="col">아직</th>
+            <th scope="col">상자 1</th>
+            <th scope="col">상자 2</th>
+            <th scope="col">상자 3</th>
+            <th scope="col">익힘</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr id="box-counts"></tr>
+        </tbody>
+      </table>
+
+      <!-- 표: 용어를 번호 순으로 -->
+      <h2 class="status-title">용어별 상태</h2>
+      <table class="term-table">
+        <thead>
+          <tr>
+            <th scope="col" class="col-id">번호</th>
+            <th scope="col" class="col-term">용어</th>
+            <th scope="col" class="col-group">묶음</th>
+            <th scope="col" class="col-state">상태</th>
+            <th scope="col" class="col-due">다음 복습 날짜</th>
+          </tr>
+        </thead>
+        <tbody id="term-rows"></tbody>
+      </table>
+
+      <!-- 오늘 쓴 답: 오늘 첫 시도한 카드 (카드 번호 순). [전부 복사]로 넣는 글과 같은 모양으로 보여 준다 -->
+      <h2 class="status-title">오늘 쓴 답</h2>
+      <p id="today-summary" class="sub"></p>
+      <div class="button-row">
+        <button type="button" id="copy-button">전부 복사</button>
+      </div>
+      <p id="copy-message" class="copy-message" role="status" hidden></p>
+      <ol id="today-list" class="today-list"></ol>
+
+      <div class="reset-row">
+        <button type="button" id="reset-button">기록 초기화</button>
       </div>
     </section>
   </main>

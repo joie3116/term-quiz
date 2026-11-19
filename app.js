@@ -1,5 +1,5 @@
 // 용어 퀴즈 v3 — 요청 1(처음 화면 · 설명 화면 · 문제 화면) + 요청 2(저장 · 날짜 · 복습 상자 · 하루 상한 · 확인용 날짜)
-// 현황 화면은 요청 3이다 ([현황 보기]는 아직 눌리지 않는다).
+// + 요청 3(현황 화면 · 오늘 쓴 답 · 전부 복사 · 기록 초기화).
 // 화면에 넣는 글(데이터의 글, 내가 쓴 답, 주소의 글)은 모두 textContent·텍스트 노드로 넣는다. innerHTML을 쓰지 않는다.
 (() => {
   'use strict';
@@ -11,6 +11,8 @@
   window.TERM_GROUPS.forEach((group) => {
     GROUP_NAMES[group.id] = group.name;
   });
+
+  const CARD_COUNT = TERMS.reduce((n, term) => n + term.cards.length, 0);   // 카드 수 (125장)
 
   const SET_SIZE = 5;       // 한 세트에 꺼내는 새 용어 수
   const DAILY_NEW = 15;     // 하루에 배우는 새 용어 수 (하루 상한)
@@ -83,6 +85,7 @@
   const homeScreen = $('home-screen');
   const learnScreen = $('learn-screen');
   const quizScreen = $('quiz-screen');
+  const statusScreen = $('status-screen');
   const answerInput = $('answer-input');
 
   // ===== 지금 상태 =====
@@ -95,7 +98,9 @@
   let queue = [];
   let current = null;       // 지금 카드
   let currentAnswer = '';   // 지금 카드에 쓴 답 ([답 확인]을 누를 때 적어 둔다)
-  let homeDay = '';         // 처음 화면에 지금 적혀 있는 날짜
+  let shownDay = '';        // 처음 화면이나 현황 화면을 마지막으로 그린 날짜
+  let statusShown = '';     // 현황 화면을 마지막으로 그린 날짜와 기록 (같으면 다시 그리지 않는다: 스크롤 자리와 "복사했어"가 남는다)
+  let statusVersion = 0;    // 현황 화면을 새로 그린 횟수 (복사가 끝났을 때 그사이 화면이 바뀌었는지 본다)
   let halted = false;       // 멈췄는지 (멈추면 아무것도 저장하지 않는다)
 
   // ===== 저장 (localStorage, SPEC 「저장과 날짜」) =====
@@ -184,12 +189,20 @@
     return TERMS.filter((term) => record.terms[term.id] === day).length;
   }
 
+  // 용어의 상자 = 그 용어 카드 중 가장 낮은 상자 (SPEC 「복습 상자 규칙」). 기록이 없는 카드가 있으면 null("아직")
+  function lowestBox(record, term) {
+    let lowest = MASTERED_BOX;
+    for (const card of term.cards) {
+      const saved = cardRecord(record, card.id);
+      if (saved === null) return null;
+      lowest = Math.min(lowest, saved.box);
+    }
+    return lowest;
+  }
+
   // 익힌 용어 수: 용어의 상태는 그 용어 카드 중 가장 낮은 상자라서, 카드가 모두 상자 4여야 익힘이다
   function masteredCount(record) {
-    return TERMS.filter((term) => term.cards.every((card) => {
-      const saved = cardRecord(record, card.id);
-      return saved !== null && saved.box === MASTERED_BOX;
-    })).length;
+    return TERMS.filter((term) => lowestBox(record, term) === MASTERED_BOX).length;
   }
 
   // ===== 멈춤 =====
@@ -290,9 +303,9 @@
 
   // ===== 화면 =====
 
-  // 세 화면 중 하나만 보이게 하고 맨 위로 올린다
+  // 네 화면 중 하나만 보이게 하고 맨 위로 올린다
   function showScreen(screen) {
-    [homeScreen, learnScreen, quizScreen].forEach((s) => {
+    [homeScreen, learnScreen, quizScreen, statusScreen].forEach((s) => {
       s.hidden = s !== screen;
     });
     window.scrollTo(0, 0);
@@ -318,7 +331,7 @@
     const learnedToday = learnedOnCount(record, day);
     const notLearned = notLearnedTerms(record).length;
 
-    homeDay = day;
+    shownDay = day;
     $('home-date').textContent = day;
     $('home-review').textContent = '오늘 복습할 카드 ' + reviewCount + '장';
     $('home-new').textContent =
@@ -328,13 +341,16 @@
     // 할 것이 없는 버튼은 눌리지 않는다
     $('review-button').disabled = reviewCount === 0;
     $('learn-button').disabled = notLearned === 0 || learnedToday >= DAILY_NEW;
-    $('status-button').disabled = true;   // 현황 화면은 요청 3에서 만든다
+    $('status-button').disabled = false;   // 현황은 늘 볼 수 있다 (멈췄을 때만 막힌다)
   }
 
-  // 처음 화면이 떠 있는 동안: 탭·창으로 돌아오면 기록을 다시 읽어 그리고(다른 탭에서 푼 것도 반영된다),
-  // 1분마다 날짜가 바뀌었는지 보고 바뀌었으면 다시 그린다 (켜 둔 채 밤을 넘겨도 [복습 시작]이 막혀 있지 않게)
-  function refreshHome() {
-    if (!halted && !homeScreen.hidden) renderHome();
+  // 처음 화면이나 현황 화면이 떠 있는 동안: 탭·창으로 돌아오면 기록을 다시 읽어 그리고(다른 탭에서 푼 것도 반영된다),
+  // 1분마다 날짜가 바뀌었는지 보고 바뀌었으면 다시 그린다 (켜 둔 채 밤을 넘겨도 [복습 시작]이 막혀 있지 않게).
+  // 현황 화면은 날짜와 기록이 그린 때와 같으면 그대로 둔다
+  function refreshScreen() {
+    if (halted) return;
+    if (!homeScreen.hidden) renderHome();
+    else if (!statusScreen.hidden) refreshStatus(false);
   }
 
   // ===== 설명 화면 =====
@@ -589,6 +605,207 @@
     showHome();
   }
 
+  // ===== 현황 화면 (SPEC 「현황 화면」) =====
+  // 저장된 기록을 읽어서 보여 주기만 한다. 기록을 바꾸는 것은 [기록 초기화] 하나다
+
+  // 상태 이름 (SPEC 「복습 상자 규칙」): 기록 없음 "아직" / 상자 0~1 "상자 1" / 2 "상자 2" / 3 "상자 3" / 4 "익힘".
+  // 요약의 상자별 카드 수도 이 다섯 칸으로 센다 (index.html 표 머리와 같은 순서)
+  const STATE_NAMES = ['아직', '상자 1', '상자 2', '상자 3', '익힘'];
+  const COPY_TROUBLE = "복사하지 못했어. 아래 '오늘 쓴 답'을 마우스로 골라 Ctrl+C로 복사해 줘.";
+
+  // 상자(기록이 없으면 null) → STATE_NAMES의 몇 번째인지. 상자 0과 1은 둘 다 "상자 1"이다
+  function stateIndex(box) {
+    return box === null ? 0 : Math.max(box, 1);
+  }
+
+  // 다음 복습 날짜: 아직 더 나올 카드(상자 0~3)의 due 중 가장 이른 날 (질문 1 (가)).
+  // 그런 카드가 없으면(익힘, 아직) 빈 글. 날짜는 'YYYY-MM-DD'라서 글자끼리 비교한다
+  function nextReviewDay(record, term) {
+    let next = '';
+    term.cards.forEach((card) => {
+      const saved = cardRecord(record, card.id);
+      if (saved !== null && saved.box < MASTERED_BOX && (next === '' || saved.due < next)) next = saved.due;
+    });
+    return next;
+  }
+
+  // 오늘 첫 시도한 카드 = 카드 기록의 day가 오늘인 카드. 카드 번호 순(1a, 1b, 2a …)으로 늘어놓는다
+  // (기록에 푼 시각이 없어서 푼 순서로는 늘어놓을 수 없다)
+  function todayEntries(record, day) {
+    const entries = [];
+    TERMS.forEach((term) => {
+      term.cards.forEach((card) => {
+        const saved = cardRecord(record, card.id);
+        if (saved !== null && saved.day === day) entries.push({ card: card, saved: saved });
+      });
+    });
+    return entries;
+  }
+
+  // "2026-12-01 · 첫 시도 10장 · 맞음 9장" (복사 글의 첫 줄은 이 앞에 "[용어 퀴즈] "를 붙인다)
+  function todaySummary(entries, day) {
+    const okCount = entries.filter((entry) => entry.saved.ok).length;
+    return day + ' · 첫 시도 ' + entries.length + '장 · 맞음 ' + okCount + '장';
+  }
+  const answerText = (saved) => (saved.answer === '' ? '(모르겠어)' : saved.answer);
+  const verdictText = (saved) => (saved.ok ? '맞음' : '다시');
+
+  // [전부 복사]로 넣는 글 (SPEC 「현황 화면」의 형식). 카드와 카드 사이에는 빈 줄을 하나 둔다 (질문 2 (가)).
+  // 장면은 데이터 그대로라서 백틱(`)이 남는다 (질문 3 (가)). 내 답은 쓴 그대로다 (줄바꿈도 그대로)
+  function copyText(entries, day) {
+    const lines = ['[용어 퀴즈] ' + todaySummary(entries, day)];
+    entries.forEach((entry, i) => {
+      if (i > 0) lines.push('');
+      lines.push('(' + entry.card.id + ') 장면: ' + entry.card.prompt);
+      lines.push('내 답: ' + answerText(entry.saved));
+      lines.push('내 채점: ' + verdictText(entry.saved));
+    });
+    return lines.join('\n');
+  }
+
+  // 글 하나를 담은 요소 (글은 textContent로 넣는다)
+  function textElement(tagName, text, className) {
+    const el = document.createElement(tagName);
+    el.textContent = text;
+    if (className) el.className = className;
+    return el;
+  }
+
+  // [현황 보기]: 기록을 새로 읽어 그린 뒤 현황 화면을 연다
+  function showStatus() {
+    refreshStatus(true);
+    if (!halted) showScreen(statusScreen);
+  }
+
+  // 기록을 새로 읽어 현황 화면을 그린다. force가 아니면, 날짜와 기록이 지난번에 그린 것과 같을 때 그대로 둔다.
+  // 돌려주는 값: 읽은 { record, day } (읽지 못해 멈췄으면 null)
+  function refreshStatus(force) {
+    if (halted) return null;
+    const record = loadRecord();
+    if (record === null) {
+      halt(STORAGE_TROUBLE);
+      return null;
+    }
+    const day = today();
+    const shown = day + ' ' + JSON.stringify(record);
+    if (force || shown !== statusShown) drawStatus(record, day, shown);
+    return { record: record, day: day };
+  }
+
+  function drawStatus(record, day, shown) {
+    statusShown = shown;
+    statusVersion += 1;
+    shownDay = day;
+
+    // 요약: 익힌 용어 x/67, 상자별 카드 수 (다섯 칸을 더하면 카드 수와 같다)
+    $('status-mastered').textContent = '익힌 용어 ' + masteredCount(record) + '/' + TERMS.length;
+    const counts = STATE_NAMES.map(() => 0);
+    TERMS.forEach((term) => {
+      term.cards.forEach((card) => {
+        const saved = cardRecord(record, card.id);
+        counts[stateIndex(saved === null ? null : saved.box)] += 1;
+      });
+    });
+    $('box-caption').textContent = '상자별 카드 수 (모두 ' + CARD_COUNT + '장)';
+    $('box-counts').replaceChildren(...counts.map((n) => textElement('td', n + '장')));
+
+    // 표: 번호 / 용어 / 묶음 / 상태 / 다음 복습 날짜. 용어 이름의 백틱 구간은 코드 글꼴로
+    $('term-rows').replaceChildren(...TERMS.map((term) => {
+      const box = lowestBox(record, term);
+      const next = nextReviewDay(record, term);
+      const name = document.createElement('td');
+      setDataText(name, term.term);
+      const row = document.createElement('tr');
+      row.append(
+        textElement('td', String(term.id)),
+        name,
+        textElement('td', GROUP_NAMES[term.group]),
+        textElement('td', STATE_NAMES[stateIndex(box)], box === null ? 'state-none' : (box === MASTERED_BOX ? 'state-mastered' : '')),
+        textElement('td', next === '' ? '—' : next, next === '' ? 'due-none' : ''),
+      );
+      return row;
+    }));
+
+    // 오늘 쓴 답: 오늘 첫 시도한 카드가 없으면 [전부 복사]가 눌리지 않는다
+    const entries = todayEntries(record, day);
+    $('today-summary').textContent = todaySummary(entries, day);
+    $('copy-button').disabled = entries.length === 0;
+    $('copy-message').hidden = true;
+    $('today-list').replaceChildren(...entries.map(todayItem));
+
+    // [기록 초기화]: 지울 기록이 없으면 눌리지 않는다
+    $('reset-button').disabled = Object.keys(record.terms).length === 0 && Object.keys(record.cards).length === 0;
+  }
+
+  // 오늘 쓴 답 한 장. 복사 글과 같은 모양이다: "(1a) 장면: …" / "내 답: …" / "내 채점: 맞음"
+  function todayItem(entry) {
+    const scene = document.createElement('p');
+    const prompt = document.createElement('span');
+    setDataText(prompt, entry.card.prompt);
+    scene.append(
+      textElement('span', '(' + entry.card.id + ')', 'today-id'), ' ',
+      textElement('span', '장면:', 'today-label'), ' ', prompt,
+    );
+
+    const answer = document.createElement('p');
+    answer.append(
+      textElement('span', '내 답:', 'today-label'), ' ',
+      textElement('span', answerText(entry.saved), entry.saved.answer === '' ? 'today-answer dunno' : 'today-answer'),
+    );
+
+    const verdict = document.createElement('p');
+    verdict.append(textElement('span', '내 채점:', 'today-label'), ' ', textElement('span', verdictText(entry.saved)));
+
+    const item = document.createElement('li');
+    item.className = 'today-item';
+    item.append(scene, answer, verdict);
+    return item;
+  }
+
+  // [전부 복사]: 누른 순간의 기록을 다시 읽어서(바뀌었으면 화면도 다시 그린다) 화면과 같은 내용을 클립보드에 넣고,
+  // "복사했어"를 보여 준다. 못 넣으면 안내 문구를 보여 준다
+  function copyAll() {
+    const read = refreshStatus(false);
+    if (read === null) return;
+    const entries = todayEntries(read.record, read.day);
+    if (entries.length === 0) return;   // 그사이 날짜가 바뀌었거나 다른 탭에서 지웠다 (다시 그려서 버튼이 막혔다)
+    const message = $('copy-message');
+    message.hidden = true;
+    const version = statusVersion;
+    writeClipboard(copyText(entries, read.day)).then((copied) => {
+      if (halted || version !== statusVersion) return;   // 그사이 화면을 새로 그렸으면 안내를 띄우지 않는다
+      message.textContent = copied ? '복사했어' : COPY_TROUBLE;
+      message.hidden = false;
+    });
+  }
+
+  // 클립보드에 글을 넣는다. 돌려주는 값: 넣었으면 true, 못 넣었으면 false (Promise)
+  function writeClipboard(text) {
+    try {
+      return navigator.clipboard.writeText(text).then(() => true, () => false);
+    } catch (error) {
+      return Promise.resolve(false);   // navigator.clipboard가 없는 곳 (보안 연결이 아닌 주소 등)
+    }
+  }
+
+  // [기록 초기화]: 확인창에서 확인을 누르면 지금 쓰는 저장 키 하나만 지운다 (취소하면 그대로).
+  // 확인용 주소면 term-quiz.v3.test, 아니면 term-quiz.v3. v2의 term-quiz.exams는 건드리지 않는다.
+  // 지운 뒤에도 현황 화면에 남아서 다시 그린다
+  function resetRecord() {
+    if (halted) return;
+    const question = TEST_DAY
+      ? '확인용 기록을 모두 지울까? 진짜 기록은 그대로 둬.'
+      : '공부 기록을 모두 지울까? 지우면 되돌릴 수 없어.';
+    if (!window.confirm(question)) return;
+    try {
+      window.localStorage.removeItem(STORE_KEY);
+    } catch (error) {
+      halt(STORAGE_TROUBLE);
+      return;
+    }
+    refreshStatus(true);
+  }
+
   // 카드 섞기 (피셔-예이츠: 모든 순서가 같은 확률로 나온다)
   function shuffle(list) {
     const copy = list.slice();
@@ -609,15 +826,19 @@
   onClick($('grade-done'), finishGrading);
   onClick($('next-card'), nextCard);
   onClick($('quiz-home'), quitQuiz);
+  onClick($('status-button'), showStatus);
+  onClick($('status-home'), showHome);
+  onClick($('copy-button'), copyAll);
+  onClick($('reset-button'), resetRecord);
   guardCheck($('wrong-label'));
   answerInput.addEventListener('input', onAnswerInput);
 
-  window.addEventListener('focus', refreshHome);
+  window.addEventListener('focus', refreshScreen);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') refreshHome();
+    if (document.visibilityState === 'visible') refreshScreen();
   });
   window.setInterval(() => {
-    if (homeDay !== today()) refreshHome();
+    if (shownDay !== today()) refreshScreen();
   }, 60 * 1000);
 
   // 확인용 날짜는 모든 화면 맨 위에 띄운다

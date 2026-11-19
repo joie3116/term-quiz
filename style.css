@@ -191,7 +191,9 @@ input:focus-visible {
 
 /* ===== 문제 화면 ===== */
 
-.quiz-top {
+/* 맨 위 줄: 왼쪽 글, 오른쪽 [처음으로] (현황 화면 맨 위도 같은 모양) */
+.quiz-top,
+.status-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -309,4 +311,125 @@ input:focus-visible {
 
 #next-card {
   margin-top: 32px;
+}
+
+/* ===== 현황 화면 ===== */
+
+/* 용어별 상태, 오늘 쓴 답 */
+.status-title {
+  margin: 48px 0 12px;
+}
+
+/* 표 두 개 (상자별 카드 수, 용어별 상태). 칸 너비를 정해 두고(table-layout: fixed),
+   칸보다 긴 글은 칸 안에서 접어서 표가 720px 밖으로 나가지 않게 한다 */
+table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 18px;
+}
+
+th,
+td {
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--ink-line);
+  overflow-wrap: anywhere;
+}
+
+th {
+  color: var(--ink-soft);
+  border-bottom-width: 2px;
+}
+
+/* 상자별 카드 수: 다섯 칸을 같은 너비로, 가운데 맞춤 */
+.box-table {
+  margin-top: 16px;
+}
+
+.box-table caption {
+  text-align: left;
+  font-weight: 700;
+}
+
+.box-table th,
+.box-table td {
+  text-align: center;
+}
+
+/* 용어별 상태: 번호·상태·날짜 칸은 한 줄로 들어갈 만큼만, 묶음 칸은 표 너비에 비례해서 잡고,
+   남은 너비는 용어 칸이 쓴다 (창이 좁아져도 용어 칸이 가장 먼저 찌그러지지 않게) */
+.term-table .col-id {
+  width: 2.2em;
+}
+
+.term-table .col-group {
+  width: 24%;
+}
+
+.term-table .col-state {
+  width: 3.2em;
+}
+
+.term-table .col-due {
+  width: 5.8em;
+}
+
+.state-mastered {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.state-none,
+.due-none {
+  color: var(--ink-soft);
+}
+
+/* "복사했어" 또는 복사하지 못했을 때의 안내 */
+.copy-message {
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* 오늘 쓴 답: 카드마다 (번호) 장면 / 내 답 / 내 채점 */
+.today-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+}
+
+.today-item {
+  padding: 16px 0;
+  border-top: 1px solid var(--ink-line);
+}
+
+.today-item p + p {
+  margin-top: 4px;
+}
+
+.today-id {
+  font-weight: 700;
+}
+
+.today-label {
+  color: var(--ink-soft);
+}
+
+/* 내 답: 쓴 그대로 (줄바꿈과 띄어쓰기를 살린다) */
+.today-answer {
+  white-space: pre-wrap;
+}
+
+.dunno {
+  color: var(--ink-soft);
+}
+
+/* [기록 초기화]는 맨 아래에 줄을 긋고 따로 둔다 */
+.reset-row {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 2px solid var(--ink-line);
 }
